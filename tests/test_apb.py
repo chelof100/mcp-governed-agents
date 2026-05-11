@@ -19,6 +19,10 @@ from stack.apb import (
 # Fixtures
 # ---------------------------------------------------------------------------
 
+# Fixed event_id for deterministic tests (UUID4 format, version=4, variant=a)
+_FIXED_EVENT_ID = "00000000-0000-4000-a000-000000000001"
+
+
 def _mk_E_s() -> SystemEvidenceBlock:
     return SystemEvidenceBlock(
         A_0_hash="a" * 64,
@@ -26,6 +30,7 @@ def _mk_E_s() -> SystemEvidenceBlock:
         t_e="2026-05-07T10:30:00+00:00",
         trace_hash="b" * 64,
         cause="persistent_drift",
+        event_id=_FIXED_EVENT_ID,
     )
 
 
@@ -51,7 +56,8 @@ def test_E_s_canonical_is_deterministic():
 def test_E_s_canonical_sorted_keys():
     e = _mk_E_s()
     raw = e.to_canonical_bytes().decode()
-    keys_in_order = [k for k in ["A_0_hash", "D_hat", "cause", "t_e", "trace_hash"]]
+    # RFC 8785: keys sorted by Unicode codepoint; event_id sorts after D_hat, before t_e
+    keys_in_order = ["A_0_hash", "D_hat", "cause", "event_id", "t_e", "trace_hash"]
     found = [raw.index(f'"{k}":') for k in keys_in_order]
     assert found == sorted(found), "canonical JSON must have keys in sorted order"
 
@@ -189,11 +195,15 @@ def test_construct_evidence_produces_E_s():
     assert len(e.trace_hash) == 64
 
 
-def test_construct_evidence_deterministic_given_inputs():
+def test_construct_evidence_deterministic_given_all_inputs():
+    """All inputs including event_id must be fixed for determinism."""
     a0 = {"theta": 0.20}
     tr = {"events": [1, 2, 3]}
-    e1 = construct_evidence(a0, 0.5, tr, "X", t_e="2026-01-01T00:00:00+00:00")
-    e2 = construct_evidence(a0, 0.5, tr, "X", t_e="2026-01-01T00:00:00+00:00")
+    eid = _FIXED_EVENT_ID
+    e1 = construct_evidence(a0, 0.5, tr, "X", t_e="2026-01-01T00:00:00+00:00",
+                            event_id=eid)
+    e2 = construct_evidence(a0, 0.5, tr, "X", t_e="2026-01-01T00:00:00+00:00",
+                            event_id=eid)
     assert e1 == e2
 
 

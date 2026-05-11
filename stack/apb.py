@@ -4,26 +4,37 @@ Accountability Proof Block (APB) — P8 §4.
 
   APB = (E_s, D_h, sigma_h)
 
-  E_s = (A_0_hash, D_hat(t_e), t_e, trace_hash, cause)   System Evidence Block
+  E_s = (A_0_hash, D_hat(t_e), t_e, event_id, trace_hash, cause)
+                                                           System Evidence Block
   D_h = (H_i, decision, rationale, scope)                Human Decision Block
   sigma_h = Sign_{sk_i}( canonical(E_s) || canonical(D_h) )
 
 Construction protocol:
   1. System builds E_s (bounded fields, bounded capture time -> T8.4)
+     event_id is a UUID4 generated at evidence construction time,
+     guaranteeing semantic uniqueness across governance events (V5).
   2. Human inspects E_s, formulates D_h, signs with sk_i
   3. APB = (E_s, D_h, sigma_h) is immutable thereafter
 
-Canonical serialization: JSON with sorted keys, UTF-8 — deterministic
-input to the signature so verification is reproducible across processes.
+Canonical serialization: RFC 8785 JSON Canonicalization Scheme (JCS).
+This is a deterministic, cross-implementation-safe encoding that
+specifies sort order, number representation, and unicode handling
+precisely, removing any ambiguity that would undermine the
+non-repudiability and tamper-detection guarantees.
+
+Reference: RFC 8785 — https://www.rfc-editor.org/rfc/rfc8785
 """
 from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import asdict, dataclass
+import uuid
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
+
+import jcs  # RFC 8785 JSON Canonicalization Scheme
 
 from agent.principal import load_private_key
 
@@ -44,11 +55,18 @@ class GovernanceDecision(str, Enum):
 
 
 # ---------------------------------------------------------------------------
-# Canonical helpers
+# Canonical helpers — RFC 8785 JSON Canonicalization Scheme
 # ---------------------------------------------------------------------------
 
 def _canonical(d: dict[str, Any]) -> bytes:
-    return json.dumps(d, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    """Return the RFC 8785 JCS canonical byte representation of a dict.
+
+    RFC 8785 specifies: keys sorted by Unicode codepoint, IEEE 754 number
+    representation, no insignificant whitespace, UTF-8 encoding.  This is
+    strictly stronger than ad-hoc sort_keys=True JSON in that it is
+    cross-implementation portable and cryptographically unambiguous.
+    """
+    return jcs.canonicalize(d)
 
 
 def hash_object(obj: Any) -> str:
@@ -72,8 +90,15 @@ def hash_object(obj: Any) -> str:
 class SystemEvidenceBlock:
     """Constructed by the execution layer at t_e from certified runtime state.
 
-    Five bounded fields (Lemma 4.1: bounded field count).
+    Six bounded fields (Lemma 4.1: bounded field count).
     Each field is a small hash or scalar (Lemma 4.2: bounded capture time).
+
+    event_id is a UUID4 generated once at evidence construction time.
+    It provides semantic uniqueness across governance events, enabling the
+    verifier's V5 (Event Uniqueness) predicate to detect duplicate
+    submissions independently of the timestamp-based V4 replay window.
+    Two governance events at the same t_e are distinguishable by event_id;
+    a replayed APB is rejected by V5 regardless of clock state.
     """
 
     A_0_hash: str       # SHA-256 hex of canonical A_0 snapshot
@@ -81,6 +106,8 @@ class SystemEvidenceBlock:
     t_e: str            # ISO 8601 UTC timestamp
     trace_hash: str     # SHA-256 hex of trace up to t_e
     cause: str          # e.g. "persistent_drift", "ram_unresolvable"
+    event_id: str = field(default_factory=lambda: str(uuid.uuid4()))
+                        # UUID4; unique per governance event (V5)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -197,12 +224,17 @@ def construct_evidence(
     trace: Any,
     cause: str,
     t_e: str | None = None,
+    event_id: str | None = None,
 ) -> SystemEvidenceBlock:
     """Build E_s from runtime state. Construction is O(|A_0| + |trace|).
 
-    Lemma 4.1: 5 fields, fixed at compile time.
+    Lemma 4.1: 6 fields, fixed at compile time.
     Lemma 4.2: each field's capture time is bounded by canonical
     serialization length, which is finite for in-memory state.
+
+    event_id defaults to a fresh UUID4.  Callers may supply a specific
+    value only in deterministic replay scenarios (e.g. test fixtures);
+    in production always rely on the default.
 
     A_0 and trace must expose `to_dict()` or be JSON-serializable.
     """
@@ -212,4 +244,5 @@ def construct_evidence(
         t_e=t_e or datetime.now(timezone.utc).isoformat(),
         trace_hash=hash_object(trace),
         cause=cause,
+        event_id=event_id or str(uuid.uuid4()),
     )

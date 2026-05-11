@@ -1,13 +1,20 @@
 # -*- coding: utf-8 -*-
 """
-APB Verifier — signature, attribution, and replay checks (P8 §5).
+APB Verifier — signature, attribution, replay, and uniqueness checks (P8 §5).
 
-A valid APB must satisfy four predicates:
+A valid APB must satisfy five predicates:
   V1. Signature verifies against the public key of the named principal.
   V2. The named principal exists in the registry.
   V3. The named principal was active at t_e (not revoked before signing).
   V4. t_e is within the acceptable window relative to the verification
-      time (replay defense).
+      time (temporal freshness / replay defense).
+  V5. event_id has not been seen before in this verification session
+      (semantic uniqueness / duplicate-submission defense).
+
+V4 and V5 are complementary defenses:
+  V4 rejects APBs that are too old or from the future (clock-based).
+  V5 rejects exact replays of a previously-accepted APB regardless of
+     clock state — including valid replays submitted within the V4 window.
 
 The verifier returns a VerificationResult that distinguishes failure
 modes — Exp B uses the per-mode counts to validate T8.2 and T8.3.
@@ -17,7 +24,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Optional
+from typing import Optional, Set
 
 from cryptography.exceptions import InvalidSignature
 
@@ -30,7 +37,8 @@ class VerificationResult(str, Enum):
     INVALID_SIGNATURE = "INVALID_SIGNATURE"
     PRINCIPAL_NOT_FOUND = "PRINCIPAL_NOT_FOUND"
     PRINCIPAL_REVOKED = "PRINCIPAL_REVOKED"
-    REPLAY = "REPLAY"
+    REPLAY = "REPLAY"              # V4: temporal freshness violation
+    DUPLICATE_EVENT_ID = "DUPLICATE_EVENT_ID"  # V5: semantic uniqueness violation
     MALFORMED = "MALFORMED"
 
 
@@ -70,11 +78,16 @@ def verify_apb(
     registry: PrincipalRegistry,
     now: Optional[str] = None,
     max_age_seconds: float = 300.0,
+    seen_event_ids: Optional[Set[str]] = None,
 ) -> VerificationReport:
-    """Run V1-V4. Returns the FIRST failing predicate, or VALID.
+    """Run V1-V5. Returns the FIRST failing predicate, or VALID.
 
     `now`: ISO 8601 UTC; defaults to current wall clock.
-    `max_age_seconds`: how recent t_e must be relative to `now`.
+    `max_age_seconds`: how recent t_e must be relative to `now` (V4).
+    `seen_event_ids`: mutable set of already-accepted event IDs (V5).
+        If provided, the function adds accepted event_ids to this set
+        so the caller maintains the nonce store across multiple calls.
+        If None, V5 is skipped (useful for single-APB validation).
     """
     H_id = apb.D_h.H_id
     principal = registry.get(H_id)
@@ -101,7 +114,7 @@ def verify_apb(
             detail="ed25519 verification failed",
         )
 
-    # V4: replay window
+    # V4: temporal replay window (clock-based freshness)
     now_iso = now or datetime.now(timezone.utc).isoformat()
     age = _age_seconds(apb.E_s.t_e, now_iso)
     if age is None:
@@ -122,6 +135,20 @@ def verify_apb(
             apb=apb,
             detail=f"t_e is {-age:.1f}s in the future (clock skew)",
         )
+
+    # V5: semantic uniqueness — event_id must not have been seen before.
+    # This defends against valid-window replays that V4 cannot catch:
+    # a legitimately fresh APB submitted twice within the acceptance window
+    # is rejected by V5 independently of clock state.
+    if seen_event_ids is not None:
+        eid = apb.E_s.event_id
+        if eid in seen_event_ids:
+            return VerificationReport(
+                result=VerificationResult.DUPLICATE_EVENT_ID,
+                apb=apb,
+                detail=f"event_id {eid!r} already accepted (duplicate submission)",
+            )
+        seen_event_ids.add(eid)
 
     return VerificationReport(result=VerificationResult.VALID, apb=apb)
 
