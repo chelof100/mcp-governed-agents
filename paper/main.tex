@@ -91,10 +91,9 @@
 % --- Abstract -----------------------------------------------------------------
 \begin{abstract}
 \noindent
-Prior work in this series established that LLM agents operating under
-runtime governance can reach persistent halt states that require
-identity-bound, cryptographically verifiable human authorisation to
-resolve (P8). The deployment question that remains is:
+Governing an LLM agent at runtime requires identity-bound,
+cryptographically verifiable human authorisation to resolve persistent
+halt states (P8). The deployment question that remained open is:
 \emph{how does the governance stack reach an agent without modifying
 the agent's code?}
 
@@ -159,7 +158,7 @@ events for human resolution. Paper~8 \citep{fernandez2026ibg}
 formalised the \emph{Accountability Proof Block} (APB) as the
 identity-bound, cryptographically signed record of those human
 resolutions. Both papers explicitly identified MCP and A2A integration
-as future work (P7~\S13, P8~\S10). This paper pays that commitment.
+as future work (P7~\S13, P8~\S10). This paper fulfills that commitment.
 
 \paragraph{Problem.}
 Deploying the P8 governance stack on an existing LLM agent requires
@@ -190,9 +189,10 @@ party. Option~(b) is exactly what MCP enables.
 
 \paragraph{Independence.}
 The formal framework, theorems, and experiments in this paper are
-self-contained. P8's APB is used as an imported dependency (frozen
-baseline), not re-proved. Readers unfamiliar with P7 or P8 will find
-the necessary definitions restated in \S\ref{sec:background}.
+self-contained; this paper can be read standalone assuming only
+\S\ref{sec:background}. P8's APB is used as an imported dependency
+(frozen baseline), not re-proved. Readers unfamiliar with P7 or P8
+will find the necessary definitions restated there.
 
 \paragraph{Roadmap.}
 \S\ref{sec:related} surveys related work.
@@ -292,9 +292,10 @@ is the system evidence block, $\Dh = (\Hi,\,\text{decision},\,
 and $\sigh = \mathrm{Sign}_{\ski}(\mathrm{canon}(\Es) \Vert
 \mathrm{canon}(\Dh))$ is the ed25519 signature.
 
-A verifier checks four predicates V1--V4: (V1)~signature validity,
+A verifier checks five predicates V1--V5: (V1)~signature validity,
 (V2)~principal registered, (V3)~principal active at $t_e$,
-(V4)~$t_e$ within replay window.
+(V4)~$t_e$ within replay window, (V5)~event\_id not previously seen
+(replay resistance, introduced in P9).
 Theorems T8.1--T8.3 of P8 establish governance completeness,
 non-repudiability, and impossibility of anonymous re-authorisation.
 
@@ -583,7 +584,7 @@ $\Delta_\text{halt} \leq \Dnet + \Dverify + \Dpolicy$.
 
 \begin{lemma}[Verification Time is $O(1)$]
 \label{lem:l921}
-APB verification (predicates V1--V4) terminates in $O(1)$ time.
+APB verification (predicates V1--V5) terminates in $O(1)$ time.
 \end{lemma}
 
 \begin{proof}
@@ -593,7 +594,8 @@ is pre-hashed internally); $O(1)$.
 V2: registry lookup by key in a hash map; $O(1)$.
 V3: ISO 8601 timestamp comparison; $O(1)$.
 V4: age computation (two timestamp subtractions); $O(1)$.
-The sum of four $O(1)$ operations is $O(1)$.
+V5: hash-map lookup for event\_id in the seen-events set; $O(1)$ amortised.
+The sum of five $O(1)$ operations is $O(1)$.
 \end{proof}
 
 \begin{remark}[Practical magnitude of the bound]
@@ -813,6 +815,37 @@ detected, $p9/\mathrm{apbRequired}$ sent to client, client returns signed
 APB, proxy verifies and resolves.}
 \label{fig:flow}
 \end{figure}
+
+\subsection{Usage Example}
+
+Inserting the proxy into an existing deployment requires two lines
+of configuration: create an \texttt{MCPInterceptor} for the session
+and pass it to the client driver.
+
+\begin{verbatim}
+from proxy.mcp_interceptor import MCPInterceptor
+from client.mcp_agent_client import MCPAgentClient
+from agent.principal import PrincipalRegistry, generate_keypair
+
+# One-time setup: register human principal
+sk, pk = generate_keypair()
+registry = PrincipalRegistry(); registry.add(Principal("human-H", pk))
+
+# Per-session: proxy + client
+interceptor = MCPInterceptor(registry=registry, H_id="human-H")
+client = MCPAgentClient(interceptor=interceptor,
+                        sk_bytes=sk, H_id="human-H",
+                        auto_decision="RESUME")
+
+# Agent calls tools transparently; governance is enforced by the proxy
+result = client.call_tool("write_data", {"target": "db", "payload": "x"})
+\end{verbatim}
+
+\noindent
+No changes to the tool server or the tool-calling logic are required.
+For A2A delegation, pass \texttt{agent\_id} and \texttt{delegation\_chain}
+to \texttt{MCPInterceptor}; the originator is automatically recorded
+in every \texttt{APBRequired} evidence block.
 
 \subsection{Test Coverage}
 
@@ -1111,7 +1144,7 @@ the originator's registered human principal may authorize governance
 events in a delegation chain.
 This prevents a sub-agent's principal from usurping governance authority
 even if their key is legitimately registered elsewhere.
-This is the only attack vector that goes beyond the P8 V1--V4 predicates;
+This is the only attack vector that goes beyond the P8 V1--V5 predicates;
 it is specific to the multi-hop A2A context.
 
 % =============================================================================
@@ -1260,7 +1293,7 @@ agent's principal.
 Five experiments validate the construction:
 \begin{itemize}[leftmargin=2em, topsep=2pt, itemsep=1pt]
   \item \textbf{E1} (latency overhead): O(1) windowed IML achieves
-        P95\,=\,$51.8\,\si{\micro\second}$, $197\times$ below the
+        P95\,=\,$51.8\,\si{\micro\second}$, $193\times$ below the
         $10\,\si{\milli\second}$ T9.1 gate; HALT pipeline adds only
         $\approx 10\,\si{\micro\second}$ over the ADMIT baseline (T9.2).
   \item \textbf{E2} (real-agent APB, $5$ seeds $\times$ $200$ steps):
