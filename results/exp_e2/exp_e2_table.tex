@@ -1,0 +1,18 @@
+\begin{table}[h]
+\centering
+\caption{E2 --- Real-agent APB end-to-end validation. E2.A: MockLLM, 5 seeds $\times$ 200 steps (50 burn-in + 150 drift). E2.B: LiveLLM (skipped).}
+\label{tab:e2-real-agent}
+\begin{tabular}{lrr}
+\toprule
+Metric & E2.A (MockLLM) & E2.B (LiveLLM) \\
+\midrule
+  Steps & 1,000 & --- \\
+  ADMIT events & 669 & --- \\
+  HALT events (APBRequired) & 310 & --- \\
+  APB validity (V1--V5) & 100.0\% & --- \\
+  RESUME resolutions & 310 & --- \\
+  $\hat{D}$ at first halt (mean) & 0.382 & --- \\
+  T9.1 Transparency Invariance & \checkmark & --- \\
+\bottomrule
+\end{tabular}
+\end{table}
