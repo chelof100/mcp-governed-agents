@@ -1,0 +1,19 @@
+\begin{table}[h]
+\centering
+\caption{E3 --- Multi-hop A2A authority propagation. E3.A: 10 depth-1 chains ($A \to B$). E3.B: one depth-2 chain ($A \to B \to C$). Originator $= A_1$ in both cases.}
+\label{tab:e3-a2a}
+\begin{tabular}{lrr}
+\toprule
+Metric & E3.A ($A \to B$) & E3.B ($A \to B \to C$) \\
+\midrule
+  Chains & 10 (depth 1) & 1 (depth 2) \\
+  Steps per chain (sub-agent) & 30 & 30 \\
+  HALT events & 134 & 13 \\
+  Correct delegation\_chain & 100.0\% & 100.0\% \\
+  Correct originator & 100.0\% & 100.0\% \\
+  Authorized by originator principal & 100.0\% & 100.0\% \\
+  APB V1--V5 verified & 100.0\% & 100.0\% \\
+  T9.3 properties (a)(b) hold & \checkmark & \checkmark \\
+\bottomrule
+\end{tabular}
+\end{table}

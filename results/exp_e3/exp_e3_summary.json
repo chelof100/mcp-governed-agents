@@ -1,0 +1,175 @@
+{
+  "timestamp": "2026-05-13T12:52:01Z",
+  "config": {
+    "n_chains": 10,
+    "n_a_steps": 20,
+    "n_b_steps": 30,
+    "agent_A": "agent-A",
+    "agent_B": "agent-B",
+    "agent_C": "agent-C"
+  },
+  "E3A_sessions": [
+    {
+      "n_halt": 13,
+      "n_chain_correct": 13,
+      "n_originator_correct": 13,
+      "n_authorized_by_originator": 13,
+      "n_apb_verified": 13,
+      "violations": [],
+      "chain_idx": 0,
+      "chain": [
+        "agent-A",
+        "agent-B"
+      ]
+    },
+    {
+      "n_halt": 13,
+      "n_chain_correct": 13,
+      "n_originator_correct": 13,
+      "n_authorized_by_originator": 13,
+      "n_apb_verified": 13,
+      "violations": [],
+      "chain_idx": 1,
+      "chain": [
+        "agent-A",
+        "agent-B"
+      ]
+    },
+    {
+      "n_halt": 15,
+      "n_chain_correct": 15,
+      "n_originator_correct": 15,
+      "n_authorized_by_originator": 15,
+      "n_apb_verified": 15,
+      "violations": [],
+      "chain_idx": 2,
+      "chain": [
+        "agent-A",
+        "agent-B"
+      ]
+    },
+    {
+      "n_halt": 14,
+      "n_chain_correct": 14,
+      "n_originator_correct": 14,
+      "n_authorized_by_originator": 14,
+      "n_apb_verified": 14,
+      "violations": [],
+      "chain_idx": 3,
+      "chain": [
+        "agent-A",
+        "agent-B"
+      ]
+    },
+    {
+      "n_halt": 11,
+      "n_chain_correct": 11,
+      "n_originator_correct": 11,
+      "n_authorized_by_originator": 11,
+      "n_apb_verified": 11,
+      "violations": [],
+      "chain_idx": 4,
+      "chain": [
+        "agent-A",
+        "agent-B"
+      ]
+    },
+    {
+      "n_halt": 16,
+      "n_chain_correct": 16,
+      "n_originator_correct": 16,
+      "n_authorized_by_originator": 16,
+      "n_apb_verified": 16,
+      "violations": [],
+      "chain_idx": 5,
+      "chain": [
+        "agent-A",
+        "agent-B"
+      ]
+    },
+    {
+      "n_halt": 13,
+      "n_chain_correct": 13,
+      "n_originator_correct": 13,
+      "n_authorized_by_originator": 13,
+      "n_apb_verified": 13,
+      "violations": [],
+      "chain_idx": 6,
+      "chain": [
+        "agent-A",
+        "agent-B"
+      ]
+    },
+    {
+      "n_halt": 14,
+      "n_chain_correct": 14,
+      "n_originator_correct": 14,
+      "n_authorized_by_originator": 14,
+      "n_apb_verified": 14,
+      "violations": [],
+      "chain_idx": 7,
+      "chain": [
+        "agent-A",
+        "agent-B"
+      ]
+    },
+    {
+      "n_halt": 11,
+      "n_chain_correct": 11,
+      "n_originator_correct": 11,
+      "n_authorized_by_originator": 11,
+      "n_apb_verified": 11,
+      "violations": [],
+      "chain_idx": 8,
+      "chain": [
+        "agent-A",
+        "agent-B"
+      ]
+    },
+    {
+      "n_halt": 14,
+      "n_chain_correct": 14,
+      "n_originator_correct": 14,
+      "n_authorized_by_originator": 14,
+      "n_apb_verified": 14,
+      "violations": [],
+      "chain_idx": 9,
+      "chain": [
+        "agent-A",
+        "agent-B"
+      ]
+    }
+  ],
+  "E3A_aggregate": {
+    "n_chains": 10,
+    "n_steps_per_chain": 30,
+    "total_halt": 134,
+    "total_chain_correct": 134,
+    "total_originator_correct": 134,
+    "total_authorized": 134,
+    "total_verified": 134,
+    "violations": []
+  },
+  "E3B_depth2": {
+    "n_halt": 13,
+    "n_chain_correct": 13,
+    "n_originator_correct": 13,
+    "n_authorized_by_originator": 13,
+    "n_apb_verified": 13,
+    "violations": [],
+    "chain": [
+      "agent-A",
+      "agent-B",
+      "agent-C"
+    ]
+  },
+  "gate": {
+    "halt_occurred": true,
+    "chain_correct": true,
+    "originator_correct": true,
+    "no_violations": true,
+    "t93_ab_hold": true,
+    "overall": true
+  },
+  "T9_3_evidence": "delegation_chain and originator correct for all 134 HALT events (E3.A) and 13 HALT events (E3.B depth-2). Originator binding holds: all APBs authorized by H_A."
+}

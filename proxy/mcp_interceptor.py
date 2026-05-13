@@ -72,10 +72,16 @@ class MCPInterceptor:
         recovery_loop: RecoveryLoop | None = None,
         ram_seed: int = 42,
         recovery_seed: int = 42,
+        # P9 multi-hop A2A extension (Def. 4.5 – 4.6 / T9.3)
+        agent_id: str | None = None,
+        delegation_chain: list[str] | None = None,
     ) -> None:
         self.registry = registry
         self.H_id = H_id
         self._risk_map = dict(risk_map or TOOL_RISK_01)
+        # A2A delegation metadata: chain = [A_1, ..., A_n], originator = A_1
+        self._agent_id = agent_id
+        self._delegation_chain: list[str] = list(delegation_chain or [])
 
         # Per-session state — reset on initialize()
         self._trace = Trace()
@@ -181,11 +187,18 @@ class MCPInterceptor:
         evidence_id = uuid.uuid4().hex[:16]
         self._pending[evidence_id] = (E_s, tool_name, args)
 
+        # Build evidence_summary; include P9 delegation metadata when present.
+        # (Def. 4.6 Multi-Hop APB Semantics: E_s.cause ⊇ {delegation_chain, originator})
+        evidence_summary = E_s.to_dict()
+        if self._delegation_chain:
+            evidence_summary["delegation_chain"] = list(self._delegation_chain)
+            evidence_summary["originator"] = self._delegation_chain[0]
+
         apb_req = APBRequired(
             tool_name=tool_name,
             args=args,
             evidence_id=evidence_id,
-            evidence_summary=E_s.to_dict(),
+            evidence_summary=evidence_summary,
         )
         self._log("APB_REQUIRED", tool_name, D_hat, detail=evidence_id)
         return ("APB_REQUIRED", apb_req)

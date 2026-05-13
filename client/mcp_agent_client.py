@@ -140,8 +140,15 @@ class MCPAgentClient:
         evidence_id = apb_req.evidence_id
         record["apb_evidence_id"] = evidence_id
 
-        # Reconstruct E_s from evidence_summary (as transmitted over protocol)
-        E_s = SystemEvidenceBlock.from_dict(apb_req.evidence_summary)
+        # Reconstruct E_s from evidence_summary (as transmitted over protocol).
+        # Filter out P9 delegation metadata (delegation_chain, originator) that
+        # may be present for A2A sessions but are not part of the base E_s schema.
+        _E_S_FIELDS = frozenset(
+            {"A_0_hash", "D_hat", "t_e", "trace_hash", "cause", "event_id"}
+        )
+        es_dict = {k: v for k, v in apb_req.evidence_summary.items()
+                   if k in _E_S_FIELDS}
+        E_s = SystemEvidenceBlock.from_dict(es_dict)
 
         # Build D_h
         D_h = HumanDecisionBlock(
