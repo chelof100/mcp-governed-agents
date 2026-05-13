@@ -1,15 +1,20 @@
 \begin{table}[h]
 \centering
-\caption{E4 --- Concurrency stress test. 10 sessions per level, 60 steps each (20 burn-in + 40 drift). Latency in \si{\micro\second}. Gate: exceptions $= 0$ and APB validity $= 100\%$.}
+\caption{E4 --- Concurrency stress test. 10 sessions per level, 60 steps each. Threads: GIL-limited. Processes: true parallel (no GIL). Latency in \si{\micro\second}. Gate: exceptions $= 0$ and APB validity $= 100\%$.}
 \label{tab:e4-concurrency}
-\begin{tabular}{rrrrrrccc}
+\begin{tabular}{lrrrrrcc}
 \toprule
-$N$ & Calls & Throughput & P95 lat. & APB valid & Exceptions & Exc.=0 & APB=100\% \\
+Mode & $N$ & Calls & Throughput & P95 lat. & APB valid & Exc.=0 & APB=100\% \\
 \midrule
-  1 & 600 & 2459 & 1241.2 & 100.0\% & 0 & \checkmark & \checkmark \\
-  4 & 600 & 2977 & 1229.9 & 100.0\% & 0 & \checkmark & \checkmark \\
-  16 & 600 & 2692 & 1311.4 & 100.0\% & 0 & \checkmark & \checkmark \\
-  64 & 600 & 2848 & 1318.8 & 100.0\% & 0 & \checkmark & \checkmark \\
+  Threads & 1 & 600 & 2617 & 1182.4 & 100.0\% & \checkmark & \checkmark \\
+   & 4 & 600 & 2997 & 1210.6 & 100.0\% & \checkmark & \checkmark \\
+   & 16 & 600 & 2746 & 1297.8 & 100.0\% & \checkmark & \checkmark \\
+   & 64 & 600 & 2784 & 1320.9 & 100.0\% & \checkmark & \checkmark \\
+\midrule
+  Processes & 1 & 2,400 & 757 & 2936.2 & 100.0\% & \checkmark & \checkmark \\
+   & 4 & 2,400 & 1146 & 3447.3 & 100.0\% & \checkmark & \checkmark \\
+   & 8 & 2,400 & 911 & 4054.3 & 100.0\% & \checkmark & \checkmark \\
+   & 16 & 2,400 & 481 & 4658.3 & 100.0\% & \checkmark & \checkmark \\
 \bottomrule
 \end{tabular}
 \end{table}
