@@ -1,16 +1,18 @@
 \begin{table}[h]
 \centering
-\caption{E1 --- Governance proxy latency overhead (local, $\Delta_{\mathrm{net}}=0$). All values in \si{\micro\second}. $N=10,000$ (ADMIT path), $N=1,000$ (HALT path). Gate: ADMIT P95 $<$ 10\,ms~(\checkmark).}
+\caption{E1 --- Governance proxy latency overhead ($\Delta_{\mathrm{net}}=0$, local benchmark). All values in \si{\micro\second}. $N=10,000$ (ADMIT), $N=1,000$ (HALT). Gate: windowed ADMIT P95 $<10\,$ms~(\checkmark).}
 \label{tab:e1-overhead}
 \begin{tabular}{lrrrrl}
 \toprule
 Condition & Mean & P50 & P95 & P99 & Note \\
 \midrule
-  Passthrough (no governance) & 0.1 & 0.1 & 0.1 & 0.1 & $\Delta_{\mathrm{exec}}$ baseline \\
-  Governed --- ADMIT path & 38.0 & 37.0 & 46.6 & 54.7 & T\ref{thm:transparency-invariance} evidence \\
-  Overhead --- ADMIT ($\Delta_{\mathrm{policy}}$) & 37.9 & 36.9 & 46.5 & 54.6 & IML + RAM check \\
-  Governed --- HALT path & 56.7 & 54.5 & 67.7 & 124.8 & T\ref{thm:halt-latency-bound} evidence \\
-  Overhead --- HALT ($\Delta_{\mathrm{policy}}+\Delta_{\mathrm{verify}}$) & 56.6 & 54.5 & 67.7 & 124.8 & full pipeline \\
+  Passthrough (baseline) & 0.1 & 0.1 & 0.1 & 0.1 & $\Delta_{\mathrm{exec}}$ only \\
+  Governed ADMIT --- O($n$) accumulating & 37.7 & 36.7 & 45.7 & 57.8 & session window = 100 \\
+  Governed ADMIT --- O(1) windowed & 46.5 & 42.5 & 51.8 & 82.3 & window $W=100$ \\
+  Governed HALT (APBRequired pipeline) & 57.0 & 55.8 & 65.2 & 99.0 & $\Delta_{\mathrm{policy}}+\Delta_{\mathrm{verify}}$ \\
+  Overhead --- O($n$) accumulating & 37.6 & 36.6 & 45.6 & 57.8 & grows with session length \\
+  Overhead --- O(1) windowed & 46.4 & 42.4 & 51.7 & 82.3 & bounded; L9.2.2 \\
+  Overhead --- HALT & 56.9 & 55.7 & 65.2 & 99.0 & T9.2 evidence \\
 \bottomrule
 \end{tabular}
 \end{table}

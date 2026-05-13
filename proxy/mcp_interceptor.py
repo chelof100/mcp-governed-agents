@@ -80,6 +80,10 @@ class MCPInterceptor:
         # rejects any APB whose D_h.H_id is not in this set, even if V1-V5 pass.
         # In A2A, set this to {originator_H_id} to enforce originator binding.
         allowed_H_ids: set[str] | None = None,
+        # P9 §4.8 IML monitor override: pass a pre-constructed IMLMonitor
+        # (e.g. WindowedIMLMonitor) to swap the drift estimator implementation.
+        # When None (default), IMLMonitor is constructed internally.
+        iml_monitor: "IMLMonitor | None" = None,
     ) -> None:
         self.registry = registry
         self.H_id = H_id
@@ -96,7 +100,7 @@ class MCPInterceptor:
         self._trace = Trace()
         burn_in = Trace()                          # empty → conservative A_0
         self._A_0 = AdmissionSnapshotP7(burn_in)
-        self._iml = IMLMonitor(self._A_0)
+        self._iml = iml_monitor if iml_monitor is not None else IMLMonitor(self._A_0)
         self._ram = ram_gate or RAMGate(rs_threshold=45.0, seed=ram_seed)
         self._recovery = recovery_loop or RecoveryLoop(seed=recovery_seed)
 

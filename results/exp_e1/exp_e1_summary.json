@@ -1,59 +1,90 @@
 {
-  "timestamp": "2026-05-13T12:32:55Z",
+  "timestamp": "2026-05-13T13:22:11Z",
   "config": {
     "n_calls_admit": 10000,
     "n_calls_halt": 1000,
     "warmup": 200,
     "session_window": 100,
+    "iml_window": 100,
     "tool_admit": "read_file",
     "tool_halt": "admin_action"
   },
   "passthrough_us": {
-    "mean": 0.05607,
-    "std": 0.04965032829700122,
+    "mean": 0.0516,
+    "std": 0.05001439792699698,
     "min": 0.0,
     "p50": 0.1,
     "p95": 0.1,
     "p99": 0.1,
     "max": 0.2
   },
-  "governed_admit_us": {
-    "mean": 37.97149,
-    "std": 9.537586182043126,
-    "min": 25.9,
-    "p50": 37.0,
-    "p95": 46.6,
-    "p99": 54.70100000000002,
-    "max": 479.7
+  "governed_admit_accumulating_us": {
+    "mean": 37.67089,
+    "std": 9.423306405285778,
+    "min": 26.2,
+    "p50": 36.7,
+    "p95": 45.7,
+    "p99": 57.80200000000004,
+    "max": 292.6
+  },
+  "governed_admit_windowed_us": {
+    "mean": 46.46304,
+    "std": 214.20597933754885,
+    "min": 33.3,
+    "p50": 42.5,
+    "p95": 51.8,
+    "p99": 82.31100000000023,
+    "max": 21392.6
   },
   "governed_halt_us": {
-    "mean": 56.68710000000001,
-    "std": 13.440812608990573,
-    "min": 48.0,
-    "p50": 54.55,
-    "p95": 67.71499999999999,
-    "p99": 124.82899999999997,
-    "max": 304.5
+    "mean": 56.953300000000006,
+    "std": 9.64198159664288,
+    "min": 48.8,
+    "p50": 55.8,
+    "p95": 65.21,
+    "p99": 99.04399999999995,
+    "max": 213.2
   },
-  "overhead_admit_us": {
-    "mean": 37.915420000000005,
-    "std": 9.537586182043128,
-    "min": 25.84393,
-    "p50": 36.94393,
-    "p95": 46.54393,
-    "p99": 54.64493000000002,
-    "max": 479.64393
+  "overhead_admit_accumulating_us": {
+    "mean": 37.61929,
+    "std": 9.423306405285778,
+    "min": 26.1484,
+    "p50": 36.6484,
+    "p95": 45.6484,
+    "p99": 57.75040000000004,
+    "max": 292.5484
+  },
+  "overhead_admit_windowed_us": {
+    "mean": 46.41144,
+    "std": 214.20597933754885,
+    "min": 33.2484,
+    "p50": 42.4484,
+    "p95": 51.7484,
+    "p99": 82.25940000000024,
+    "max": 21392.5484
   },
   "overhead_halt_us": {
-    "mean": 56.631029999999996,
-    "std": 13.440812608990573,
-    "min": 47.94393,
-    "p50": 54.493930000000006,
-    "p95": 67.65892999999998,
-    "p99": 124.77292999999996,
-    "max": 304.44393
+    "mean": 56.9017,
+    "std": 9.64198159664288,
+    "min": 48.7484,
+    "p50": 55.7484,
+    "p95": 65.1584,
+    "p99": 98.99239999999996,
+    "max": 213.14839999999998
   },
-  "gate_admit_p95_lt_10ms": true,
-  "T9_1_evidence": "ADMIT path P95 overhead = 46.5 us (< 10,000 us) -> Transparency Invariance holds",
-  "T9_2_evidence": "HALT path mean overhead = 56.6 us (= \u0394_policy + \u0394_verify; \u0394_net = 0 local benchmark)"
+  "iml_growth_profile_us": {
+    "1": 45.21,
+    "50": 55.14,
+    "100": 63.33,
+    "200": 79.98,
+    "500": 127.2,
+    "1000": 203.21,
+    "2000": 353.21
+  },
+  "gate_windowed_p95_lt_10ms": true,
+  "gate_overhead_ratio_le_2x": false,
+  "gate_overall": true,
+  "T9_1_evidence": "ADMIT O(1) windowed P95 overhead = 51.7 us (< 10,000 us). Transparency Invariance holds on non-HALT path.",
+  "T9_2_evidence": "HALT path mean overhead = 56.9 us (= Delta_policy + Delta_verify; Delta_net = 0 local benchmark).",
+  "L9_2_2_evidence": "O(1) windowed mean = 46.5 us (W=100). O(n) at n=1000: 203.21 us. Windowed overhead is W-bounded, session-length independent."
 }
