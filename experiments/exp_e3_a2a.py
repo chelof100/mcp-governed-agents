@@ -311,16 +311,110 @@ def run_e3b(
     return stats
 
 
+# ── E3.C: Depth scaling 1 to MAX_DEPTH ───────────────────────────────────────
+
+MAX_DEPTH       = 5    # test depth in {1, 2, 3, 4, 5}
+N_DEPTH_RUNS    = 5    # independent runs per depth for statistical stability
+N_DEPTH_STEPS   = 30   # steps per sub-agent at each depth level
+
+
+def run_e3_depth_scaling(
+    registry: PrincipalRegistry,
+    H_A: str, sk_A: bytes,
+) -> dict[str, Any]:
+    """Test originator binding invariance across chain depths 1..MAX_DEPTH.
+
+    For each depth d, builds chain [A_1, ..., A_d].
+    The LAST agent (A_d) runs N_DEPTH_STEPS drift steps.
+    Verifies: originator == A_1 for ALL halt events, for ALL depths.
+
+    T9.3 claim (depth-invariant originator binding):
+      forall d in 1..MAX_DEPTH, forall HALT event e at depth d:
+        e.delegation_chain[0] == A_1  (originator is always chain head)
+    """
+    depth_results: dict[int, dict[str, Any]] = {}
+    agent_names = [f"agent-D{i}" for i in range(MAX_DEPTH + 1)]
+    # A_1 is always the originator for all depths
+
+    for depth in range(1, MAX_DEPTH + 1):
+        chain = agent_names[:depth + 1]   # [agent-D0, ..., agent-Ddepth]
+        originator = chain[0]
+        terminal_agent = chain[-1]
+
+        run_halts   = 0
+        run_chain_ok = 0
+        run_orig_ok  = 0
+
+        for run_idx in range(N_DEPTH_RUNS):
+            # Build interceptor for the terminal agent
+            interceptor = MCPInterceptor(
+                registry=registry,
+                H_id=H_A,
+                agent_id=terminal_agent,
+                delegation_chain=chain,
+            )
+            client = _E3AgentClient(
+                interceptor=interceptor,
+                sk_bytes=sk_A,
+                H_id=H_A,
+                auto_decision="RESUME",
+            )
+            llm = MockLLM(seed=depth * 100 + run_idx)
+            for step_idx in range(N_DEPTH_STEPS):
+                progress = step_idx / N_DEPTH_STEPS
+                tool, _ = llm.select("drift", progress)
+                client.call_tool(tool, _tool_args(tool))
+
+            # Verify per-step
+            for step in client.step_log:
+                if step["outcome"] != "APB_REQUIRED":
+                    continue
+                run_halts += 1
+                ev = step.get("_evidence_summary_raw", {})
+                if ev.get("delegation_chain") == chain:
+                    run_chain_ok += 1
+                if ev.get("originator") == originator:
+                    run_orig_ok += 1
+
+        depth_results[depth] = {
+            "depth":          depth,
+            "chain":          chain,
+            "originator":     originator,
+            "n_runs":         N_DEPTH_RUNS,
+            "n_halt":         run_halts,
+            "n_chain_correct": run_chain_ok,
+            "n_orig_correct":  run_orig_ok,
+            "chain_pct":      round(100.0 * run_chain_ok / run_halts, 2) if run_halts else 0.0,
+            "orig_pct":       round(100.0 * run_orig_ok  / run_halts, 2) if run_halts else 0.0,
+            "invariant_holds": run_orig_ok == run_halts and run_halts > 0,
+        }
+
+    # Summary: does T9.3 hold for ALL depths?
+    all_invariant = all(v["invariant_holds"] for v in depth_results.values())
+    total_halts   = sum(v["n_halt"] for v in depth_results.values())
+
+    return {
+        "max_depth":       MAX_DEPTH,
+        "n_runs_per_depth": N_DEPTH_RUNS,
+        "n_steps_per_run": N_DEPTH_STEPS,
+        "depths":          depth_results,
+        "all_depths_invariant": all_invariant,
+        "total_halt_events":   total_halts,
+    }
+
+
 # ── LaTeX table ────────────────────────────────────────────────────────────────
 
 
 def _latex_table(summary: dict[str, Any]) -> str:
     agg = summary["E3A_aggregate"]
     e3b = summary["E3B_depth2"]
+    e3c = summary.get("E3C_depth_scaling")
 
     def pct(num, den): return f"{100.0*num/den:.1f}\\%" if den else "---"
 
-    rows = (
+    # E3.A / E3.B table
+    rows_ab = (
         rf"  Chains & {agg['n_chains']} (depth 1) & 1 (depth 2) \\" + "\n"
         rf"  Steps per chain (sub-agent) & {N_B_STEPS} & {N_B_STEPS} \\" + "\n"
         rf"  HALT events & {agg['total_halt']} & {e3b['n_halt']} \\" + "\n"
@@ -330,9 +424,6 @@ def _latex_table(summary: dict[str, Any]) -> str:
         rf"  Correct originator & "
         + pct(agg['total_originator_correct'], agg['total_halt'])
         + " & " + pct(e3b['n_originator_correct'], e3b['n_halt']) + r" \\" + "\n"
-        rf"  Authorized by originator principal & "
-        + pct(agg['total_authorized'], agg['total_halt'])
-        + " & " + pct(e3b['n_authorized_by_originator'], e3b['n_halt']) + r" \\" + "\n"
         rf"  APB V1--V5 verified & "
         + pct(agg['total_verified'], agg['total_halt'])
         + " & " + pct(e3b['n_apb_verified'], e3b['n_halt']) + r" \\" + "\n"
@@ -343,7 +434,19 @@ def _latex_table(summary: dict[str, Any]) -> str:
         + r" \\" + "\n"
     )
 
-    return (
+    # E3.C depth scaling table (separate, smaller)
+    rows_c = ""
+    if e3c:
+        for d in range(1, e3c["max_depth"] + 1):
+            dv = e3c["depths"].get(str(d), e3c["depths"].get(d, {}))
+            inv = r"\checkmark" if dv.get("invariant_holds") else r"\times"
+            rows_c += (
+                f"  {d} & {len(dv.get('chain', []))-1 + 1} & "
+                f"{dv.get('n_halt', 0)} & "
+                f"{dv.get('orig_pct', 0):.1f}\\% & {inv} \\\\\n"
+            )
+
+    table_ab = (
         r"\begin{table}[h]" "\n"
         r"\centering" "\n"
         r"\caption{E3 --- Multi-hop A2A authority propagation. "
@@ -355,11 +458,33 @@ def _latex_table(summary: dict[str, Any]) -> str:
         r"\toprule" "\n"
         r"Metric & E3.A ($A \to B$) & E3.B ($A \to B \to C$) \\" "\n"
         r"\midrule" "\n"
-        + rows
+        + rows_ab
         + r"\bottomrule" "\n"
         r"\end{tabular}" "\n"
         r"\end{table}" "\n"
     )
+
+    table_c = ""
+    if rows_c:
+        table_c = (
+            r"\begin{table}[h]" "\n"
+            r"\centering" "\n"
+            r"\caption{E3.C --- Originator binding depth invariance. "
+            + str(N_DEPTH_RUNS) + r" runs/depth, "
+            + str(N_DEPTH_STEPS) + r" steps each. "
+            r"Originator $= A_1$ regardless of chain depth.}" "\n"
+            r"\label{tab:e3c-depth}" "\n"
+            r"\begin{tabular}{rrrrc}" "\n"
+            r"\toprule" "\n"
+            r"Depth & Chain len. & HALTs & Orig.=A_1 & Invariant \\" "\n"
+            r"\midrule" "\n"
+            + rows_c
+            + r"\bottomrule" "\n"
+            r"\end{tabular}" "\n"
+            r"\end{table}" "\n"
+        )
+
+    return table_ab + "\n" + table_c
 
 
 # ── Main ───────────────────────────────────────────────────────────────────────
@@ -400,12 +525,26 @@ def main() -> bool:
           f"orig_ok={pct(e3b['n_originator_correct'], e3b['n_halt'])}  "
           f"verified={pct(e3b['n_apb_verified'], e3b['n_halt'])}")
 
+    # ── E3.C: Depth scaling 1→5 ───────────────────────────────────────────
+    print(f"\n[E3.C] Depth scaling 1->{MAX_DEPTH}  runs/depth={N_DEPTH_RUNS}  "
+          f"steps={N_DEPTH_STEPS}")
+    e3c = run_e3_depth_scaling(registry, H_A, sk_A)
+    for d in range(1, MAX_DEPTH + 1):
+        dv = e3c["depths"][d]
+        print(f"  depth={d}: chain={dv['chain']}  "
+              f"halt={dv['n_halt']}  "
+              f"orig_ok={dv['orig_pct']:.1f}%  "
+              f"{'HOLD' if dv['invariant_holds'] else 'VIOLATED'}")
+    print(f"  T9.3 depth-invariant originator: "
+          f"{'HOLD' if e3c['all_depths_invariant'] else 'VIOLATED'}")
+
     # ── Gate checks ────────────────────────────────────────────────────────
     gate_1 = total_halt > 0
     gate_2 = total_chain_ok == total_halt and e3b["n_chain_correct"] == e3b["n_halt"]
     gate_3 = total_orig_ok  == total_halt and e3b["n_originator_correct"] == e3b["n_halt"]
     gate_4 = len(all_violations) == 0
-    gate_ok = gate_1 and gate_2 and gate_3 and gate_4
+    gate_5 = e3c["all_depths_invariant"]
+    gate_ok = gate_1 and gate_2 and gate_3 and gate_4 and gate_5
 
     t93_ab_hold = gate_2 and gate_3
 
@@ -414,6 +553,7 @@ def main() -> bool:
     print(f"  2. delegation_chain correct 100%:  {'PASS' if gate_2 else 'FAIL'}")
     print(f"  3. originator correct 100%:        {'PASS' if gate_3 else 'FAIL'}")
     print(f"  4. Zero violations:                {'PASS' if gate_4 else 'FAIL'}")
+    print(f"  5. Depth invariance (E3.C):        {'PASS' if gate_5 else 'FAIL'}")
     print(f"  T9.3(a)(b) hold:                   {'YES' if t93_ab_hold else 'NO'}")
     print(f"  Overall: {'PASS' if gate_ok else 'FAIL'}")
 
@@ -431,32 +571,43 @@ def main() -> bool:
         "violations":            all_violations,
     }
 
+    # Serialize depth_results dict with str keys for JSON
+    e3c_json = dict(e3c)
+    e3c_json["depths"] = {str(k): v for k, v in e3c["depths"].items()}
+
     summary: dict[str, Any] = {
         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "config": {
-            "n_chains":   N_CHAINS,
-            "n_a_steps":  N_A_STEPS,
-            "n_b_steps":  N_B_STEPS,
-            "agent_A":    AGENT_A,
-            "agent_B":    AGENT_B,
-            "agent_C":    AGENT_C,
+            "n_chains":         N_CHAINS,
+            "n_a_steps":        N_A_STEPS,
+            "n_b_steps":        N_B_STEPS,
+            "max_depth":        MAX_DEPTH,
+            "n_depth_runs":     N_DEPTH_RUNS,
+            "n_depth_steps":    N_DEPTH_STEPS,
+            "agent_A":          AGENT_A,
+            "agent_B":          AGENT_B,
+            "agent_C":          AGENT_C,
         },
         "E3A_sessions":  e3a_results,
         "E3A_aggregate": agg_e3a,
         "E3B_depth2":    e3b,
+        "E3C_depth_scaling": e3c_json,
         "gate": {
-            "halt_occurred":     gate_1,
-            "chain_correct":     gate_2,
-            "originator_correct": gate_3,
-            "no_violations":     gate_4,
-            "t93_ab_hold":       t93_ab_hold,
-            "overall":           gate_ok,
+            "halt_occurred":       gate_1,
+            "chain_correct":       gate_2,
+            "originator_correct":  gate_3,
+            "no_violations":       gate_4,
+            "depth_invariant":     gate_5,
+            "t93_ab_hold":         t93_ab_hold,
+            "overall":             gate_ok,
         },
         "T9_3_evidence": (
             f"delegation_chain and originator correct for all "
-            f"{total_halt} HALT events (E3.A) and "
+            f"{total_halt} HALT events (E3.A depth-1) and "
             f"{e3b['n_halt']} HALT events (E3.B depth-2). "
-            f"Originator binding holds: all APBs authorized by H_A."
+            f"E3.C: originator binding holds for all depths 1-{MAX_DEPTH} "
+            f"({e3c['total_halt_events']} total HALTs). "
+            f"T9.3 depth-invariant originator binding confirmed."
             if gate_ok else "T9.3 check failed"
         ),
     }
@@ -468,7 +619,7 @@ def main() -> bool:
 
     tex_path = RESULTS_DIR / "exp_e3_table.tex"
     with open(tex_path, "w", encoding="utf-8") as fh:
-        fh.write(_latex_table(summary))
+        fh.write(_latex_table({**summary, "E3C_depth_scaling": e3c_json}))
     print(f"  Saved -> {tex_path}")
 
     print("\n" + "=" * 62)

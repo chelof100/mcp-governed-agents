@@ -11,9 +11,25 @@ Metric & E3.A ($A \to B$) & E3.B ($A \to B \to C$) \\
   HALT events & 134 & 13 \\
   Correct delegation\_chain & 100.0\% & 100.0\% \\
   Correct originator & 100.0\% & 100.0\% \\
-  Authorized by originator principal & 100.0\% & 100.0\% \\
   APB V1--V5 verified & 100.0\% & 100.0\% \\
   T9.3 properties (a)(b) hold & \checkmark & \checkmark \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[h]
+\centering
+\caption{E3.C --- Originator binding depth invariance. 5 runs/depth, 30 steps each. Originator $= A_1$ regardless of chain depth.}
+\label{tab:e3c-depth}
+\begin{tabular}{rrrrc}
+\toprule
+Depth & Chain len. & HALTs & Orig.=A_1 & Invariant \\
+\midrule
+  1 & 2 & 66 & 100.0\% & \checkmark \\
+  2 & 3 & 66 & 100.0\% & \checkmark \\
+  3 & 4 & 68 & 100.0\% & \checkmark \\
+  4 & 5 & 65 & 100.0\% & \checkmark \\
+  5 & 6 & 69 & 100.0\% & \checkmark \\
 \bottomrule
 \end{tabular}
 \end{table}

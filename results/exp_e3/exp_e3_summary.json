@@ -1,9 +1,12 @@
 {
-  "timestamp": "2026-05-13T12:52:01Z",
+  "timestamp": "2026-05-13T14:05:48Z",
   "config": {
     "n_chains": 10,
     "n_a_steps": 20,
     "n_b_steps": 30,
+    "max_depth": 5,
+    "n_depth_runs": 5,
+    "n_depth_steps": 30,
     "agent_A": "agent-A",
     "agent_B": "agent-B",
     "agent_C": "agent-C"
@@ -163,13 +166,108 @@
       "agent-C"
     ]
   },
+  "E3C_depth_scaling": {
+    "max_depth": 5,
+    "n_runs_per_depth": 5,
+    "n_steps_per_run": 30,
+    "depths": {
+      "1": {
+        "depth": 1,
+        "chain": [
+          "agent-D0",
+          "agent-D1"
+        ],
+        "originator": "agent-D0",
+        "n_runs": 5,
+        "n_halt": 66,
+        "n_chain_correct": 66,
+        "n_orig_correct": 66,
+        "chain_pct": 100.0,
+        "orig_pct": 100.0,
+        "invariant_holds": true
+      },
+      "2": {
+        "depth": 2,
+        "chain": [
+          "agent-D0",
+          "agent-D1",
+          "agent-D2"
+        ],
+        "originator": "agent-D0",
+        "n_runs": 5,
+        "n_halt": 66,
+        "n_chain_correct": 66,
+        "n_orig_correct": 66,
+        "chain_pct": 100.0,
+        "orig_pct": 100.0,
+        "invariant_holds": true
+      },
+      "3": {
+        "depth": 3,
+        "chain": [
+          "agent-D0",
+          "agent-D1",
+          "agent-D2",
+          "agent-D3"
+        ],
+        "originator": "agent-D0",
+        "n_runs": 5,
+        "n_halt": 68,
+        "n_chain_correct": 68,
+        "n_orig_correct": 68,
+        "chain_pct": 100.0,
+        "orig_pct": 100.0,
+        "invariant_holds": true
+      },
+      "4": {
+        "depth": 4,
+        "chain": [
+          "agent-D0",
+          "agent-D1",
+          "agent-D2",
+          "agent-D3",
+          "agent-D4"
+        ],
+        "originator": "agent-D0",
+        "n_runs": 5,
+        "n_halt": 65,
+        "n_chain_correct": 65,
+        "n_orig_correct": 65,
+        "chain_pct": 100.0,
+        "orig_pct": 100.0,
+        "invariant_holds": true
+      },
+      "5": {
+        "depth": 5,
+        "chain": [
+          "agent-D0",
+          "agent-D1",
+          "agent-D2",
+          "agent-D3",
+          "agent-D4",
+          "agent-D5"
+        ],
+        "originator": "agent-D0",
+        "n_runs": 5,
+        "n_halt": 69,
+        "n_chain_correct": 69,
+        "n_orig_correct": 69,
+        "chain_pct": 100.0,
+        "orig_pct": 100.0,
+        "invariant_holds": true
+      }
+    },
+    "all_depths_invariant": true,
+    "total_halt_events": 334
+  },
   "gate": {
     "halt_occurred": true,
     "chain_correct": true,
     "originator_correct": true,
     "no_violations": true,
+    "depth_invariant": true,
     "t93_ab_hold": true,
     "overall": true
   },
-  "T9_3_evidence": "delegation_chain and originator correct for all 134 HALT events (E3.A) and 13 HALT events (E3.B depth-2). Originator binding holds: all APBs authorized by H_A."
+  "T9_3_evidence": "delegation_chain and originator correct for all 134 HALT events (E3.A depth-1) and 13 HALT events (E3.B depth-2). E3.C: originator binding holds for all depths 1-5 (334 total HALTs). T9.3 depth-invariant originator binding confirmed."
 }
