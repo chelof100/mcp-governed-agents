@@ -1,0 +1,59 @@
+{
+  "timestamp": "2026-05-13T12:32:55Z",
+  "config": {
+    "n_calls_admit": 10000,
+    "n_calls_halt": 1000,
+    "warmup": 200,
+    "session_window": 100,
+    "tool_admit": "read_file",
+    "tool_halt": "admin_action"
+  },
+  "passthrough_us": {
+    "mean": 0.05607,
+    "std": 0.04965032829700122,
+    "min": 0.0,
+    "p50": 0.1,
+    "p95": 0.1,
+    "p99": 0.1,
+    "max": 0.2
+  },
+  "governed_admit_us": {
+    "mean": 37.97149,
+    "std": 9.537586182043126,
+    "min": 25.9,
+    "p50": 37.0,
+    "p95": 46.6,
+    "p99": 54.70100000000002,
+    "max": 479.7
+  },
+  "governed_halt_us": {
+    "mean": 56.68710000000001,
+    "std": 13.440812608990573,
+    "min": 48.0,
+    "p50": 54.55,
+    "p95": 67.71499999999999,
+    "p99": 124.82899999999997,
+    "max": 304.5
+  },
+  "overhead_admit_us": {
+    "mean": 37.915420000000005,
+    "std": 9.537586182043128,
+    "min": 25.84393,
+    "p50": 36.94393,
+    "p95": 46.54393,
+    "p99": 54.64493000000002,
+    "max": 479.64393
+  },
+  "overhead_halt_us": {
+    "mean": 56.631029999999996,
+    "std": 13.440812608990573,
+    "min": 47.94393,
+    "p50": 54.493930000000006,
+    "p95": 67.65892999999998,
+    "p99": 124.77292999999996,
+    "max": 304.44393
+  },
+  "gate_admit_p95_lt_10ms": true,
+  "T9_1_evidence": "ADMIT path P95 overhead = 46.5 us (< 10,000 us) -> Transparency Invariance holds",
+  "T9_2_evidence": "HALT path mean overhead = 56.6 us (= \u0394_policy + \u0394_verify; \u0394_net = 0 local benchmark)"
+}
