@@ -1,0 +1,16 @@
+\begin{table}[h]
+\centering
+\caption{E5 --- Security adversarial suite. Five attack scenarios targeting the MCP governance proxy. All attacks must be rejected (adversary success rate $= 0$).}
+\label{tab:e5-adversarial}
+\begin{tabular}{llllc}
+\toprule
+ID & Attack & Outcome & Predicate & Pass \\
+\midrule
+  A1 & \textit{Wrong-key signing} & Rejected & INVALID\_SIGNATURE & \checkmark \\
+  A2 & \textit{E_s tampering} & Rejected & does not match issued evidence & \checkmark \\
+  A3 & \textit{APB replay} & Rejected & unknown evidence\_id & \checkmark \\
+  A4 & \textit{Revoked principal authorization attempt} & Rejected & PRINCIPAL\_REVOKED & \checkmark \\
+  A5 & \textit{Authority substitution in A2A delegation} & Rejected & authority confinement violation & \checkmark \\
+\bottomrule
+\end{tabular}
+\end{table}

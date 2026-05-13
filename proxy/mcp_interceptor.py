@@ -75,6 +75,11 @@ class MCPInterceptor:
         # P9 multi-hop A2A extension (Def. 4.5 – 4.6 / T9.3)
         agent_id: str | None = None,
         delegation_chain: list[str] | None = None,
+        # P9 §4.7 Authority Confinement: restrict which H_ids may authorize
+        # governance events on this interceptor.  When set, handle_apb_response
+        # rejects any APB whose D_h.H_id is not in this set, even if V1-V5 pass.
+        # In A2A, set this to {originator_H_id} to enforce originator binding.
+        allowed_H_ids: set[str] | None = None,
     ) -> None:
         self.registry = registry
         self.H_id = H_id
@@ -82,6 +87,10 @@ class MCPInterceptor:
         # A2A delegation metadata: chain = [A_1, ..., A_n], originator = A_1
         self._agent_id = agent_id
         self._delegation_chain: list[str] = list(delegation_chain or [])
+        # Authority confinement: if set, only these principals may authorize
+        self._allowed_H_ids: set[str] | None = (
+            set(allowed_H_ids) if allowed_H_ids is not None else None
+        )
 
         # Per-session state — reset on initialize()
         self._trace = Trace()
@@ -243,6 +252,20 @@ class MCPInterceptor:
             del self._pending[evidence_id]
             reason = f"APB verification failed: {report.result.value}"
             return ("REJECTED", reason)
+
+        # P9 §4.7 Authority Confinement check — enforces that D_h.H_id is
+        # one of the pre-approved principals for this interceptor.  This
+        # prevents a sub-agent from substituting an alternative (but
+        # legitimately registered) human authority in A2A delegation chains.
+        if self._allowed_H_ids is not None:
+            if apb.D_h.H_id not in self._allowed_H_ids:
+                del self._pending[evidence_id]
+                allowed_str = ", ".join(sorted(self._allowed_H_ids))
+                reason = (
+                    f"authority confinement violation: {apb.D_h.H_id!r} "
+                    f"not in allowed_H_ids ({{{allowed_str}}})"
+                )
+                return ("REJECTED", reason)
 
         del self._pending[evidence_id]
         decision = GovernanceDecision(apb.D_h.decision)

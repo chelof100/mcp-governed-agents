@@ -1,0 +1,72 @@
+{
+  "timestamp": "2026-05-13T13:17:21Z",
+  "attacks": [
+    {
+      "id": "A1",
+      "name": "Wrong-key signing (sub-agent impersonation)",
+      "pass": true,
+      "rejected": true,
+      "status": "REJECTED",
+      "reason": "APB verification failed: INVALID_SIGNATURE",
+      "expected_keyword": "INVALID_SIGNATURE",
+      "keyword_found": true,
+      "duration_us": 1654.8,
+      "notes": "V1 must reject: signature was made with sk_B but pk_A is registered."
+    },
+    {
+      "id": "A2",
+      "name": "E_s tampering (drift inflation deflation)",
+      "pass": true,
+      "rejected": true,
+      "status": "REJECTED",
+      "reason": "E_s in APB does not match issued evidence",
+      "expected_keyword": "does not match issued evidence",
+      "keyword_found": true,
+      "duration_us": 494.8,
+      "notes": "E_s D_hat deflated from 0.2509 to 0.0000. Pre-check fires before V1 is reached."
+    },
+    {
+      "id": "A3",
+      "name": "APB replay (same-session double submission)",
+      "pass": true,
+      "rejected": true,
+      "status": "REJECTED",
+      "reason": "unknown evidence_id: 'c4c7f4c2540c49ad'",
+      "expected_keyword": "unknown evidence_id",
+      "keyword_found": true,
+      "duration_us": 552.2,
+      "notes": "First submission: RESOLVED. Second submission (replay): evidence_id already consumed from pending dict. V5 event_id check defends against cross-session replays."
+    },
+    {
+      "id": "A4",
+      "name": "Revoked principal authorization attempt",
+      "pass": true,
+      "rejected": true,
+      "status": "REJECTED",
+      "reason": "APB verification failed: PRINCIPAL_REVOKED",
+      "expected_keyword": "PRINCIPAL_REVOKED",
+      "keyword_found": true,
+      "duration_us": 759.2,
+      "notes": "H_A revoked before t_e. V3 checks is_active(H_A, at_time=t_e). Since t_e > revoked_at: is_active = False -> PRINCIPAL_REVOKED."
+    },
+    {
+      "id": "A5",
+      "name": "Authority substitution in A2A delegation (P9 S4.7)",
+      "pass": true,
+      "rejected": true,
+      "status": "REJECTED",
+      "reason": "authority confinement violation: 'human-HB' not in allowed_H_ids ({human-HA})",
+      "expected_keyword": "authority confinement violation",
+      "keyword_found": true,
+      "duration_us": 919.7,
+      "notes": "Secure interceptor (allowed_H_ids={H_A}): REJECTED. Insecure interceptor (no confinement): RESOLVED [demonstrates gap without fix]. V1-V5 all pass for H_B; confinement check fires post-V5."
+    }
+  ],
+  "gate": {
+    "attacks_rejected": 5,
+    "total_attacks": 5,
+    "adversary_success": 0,
+    "overall": true
+  },
+  "SI9_1_evidence": "All 5/5 attacks rejected. Adversary success rate = 0%. V1 (wrong-key), E_s-mismatch, pending-dict, V3 (revoked), P9-S4.7 (authority confinement) all correctly enforce."
+}
