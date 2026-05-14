@@ -100,11 +100,15 @@ the agent's code?}
 We answer this question by positioning the governance stack at the
 \emph{Model Context Protocol} (MCP) layer.
 We introduce the \emph{MCP Governance Proxy} ($\Proxy$), a stateful
-middleware that intercepts tool calls between any MCP-compatible agent
-client and any MCP server, applying the P7--P8 governance stack
+\emph{protocol-layer governance control plane} that intercepts tool
+calls between any MCP-compatible agent client and any MCP server,
+applying the P7--P8 governance stack
 (IML\,+\,RAM\,+\,Recovery Loop\,+\,APB) transparently.
 No modification to the agent client or server is required;
 the proxy is a drop-in addition to the deployment topology.
+This positions governance at the protocol boundary rather than inside
+the agent---the same architectural move that service meshes make for
+microservice traffic and that zero-trust gateways make for API calls.
 
 We prove three theorems.
 \emph{Transparency Invariance} (T9.1) establishes that on the non-halt
@@ -149,7 +153,8 @@ creates a deployment opportunity that prior work in this series did not
 exploit: because all tool calls pass through a single, well-specified
 protocol, a governance layer inserted at that protocol boundary
 governs \emph{all} of the agent's external actions without modifying
-the agent's code.
+the agent's code---instantiating, in effect, a
+\emph{protocol-layer governance control plane} for LLM agents.
 
 Paper~7 of this series \citep{fernandez2026applied} established an
 integrated runtime governance stack that detects drift, applies the
@@ -244,7 +249,10 @@ enforce access control policies but do not maintain per-event,
 per-principal accountability records. Our contribution is specific to
 the LLM-agent governance problem: stateful drift detection, the RAM
 authority model, and the APB all require state that general-purpose
-proxies do not maintain.
+proxies do not maintain. The present work occupies the same
+architectural category---a \emph{governance control plane at the
+protocol layer}---but for LLM-agent systems, with state requirements
+specific to that domain.
 
 \paragraph{Agent governance series.}
 This paper is the ninth in a series
@@ -1278,9 +1286,12 @@ modifying the proxy architecture.
 \section{Conclusion}
 \label{sec:conclusion}
 
-We introduced the MCP Governance Proxy ($\Proxy$), a stateful
-middleware that deploys identity-bound governance (P8 APB protocol)
-on any MCP-compatible LLM agent without modifying the agent's code.
+We introduced the MCP Governance Proxy ($\Proxy$), a
+\emph{protocol-layer governance control plane} that deploys
+identity-bound governance (P8 APB protocol) on any MCP-compatible
+LLM agent without modifying the agent's code---the first governance
+infrastructure of this kind, occupying the same architectural role
+that service meshes occupy for microservice traffic.
 We proved three theorems: Transparency Invariance (T9.1), establishing
 that the proxy is observationally equivalent to a direct server
 connection on the non-halt path; Halt Latency Bound (T9.2), establishing
@@ -1316,14 +1327,22 @@ The implementation, available at
 tests ($61$ inherited from P7+P8, $31$ new proxy tests).
 
 \paragraph{Future work.}
-The natural extension is the Merkle-chained APB log for distributed,
-multi-organisation governance, providing tamper-evident accountability
+The most pressing extension is \emph{non-blocking governance}: the
+current proxy suspends execution until a human signs the APB.
+Paper~10 will formalise timeout semantics, escrow-state serialisation,
+and deferred-approval queues so that governance events can be resolved
+asynchronously without halting the agent pipeline.
+A second direction is distributed, multi-organisation governance
+via a Merkle-chained APB log providing tamper-evident accountability
 across organisational boundaries.
-A second direction is dynamic tool discovery: the current proxy
-hardcodes the five P7 tools; a conformant MCP proxy should mirror
+A third direction is dynamic tool discovery: the current proxy
+hardcodes the tool risk map; a conformant implementation should mirror
 the server's tool list dynamically and apply risk scores via a
 configurable policy file.
-We leave both as Paper~10 of the series.
+Finally, T9.3 (Multi-Hop Authority Propagation, depth~1--5) warrants
+a dedicated formalisation: an inductive proof for arbitrary chain
+depth, a full adversarial model for authority-substitution attacks,
+and cross-organisation delegation under federated PKI.
 
 \paragraph{Code and data.}
 All code and experimental data are available at
