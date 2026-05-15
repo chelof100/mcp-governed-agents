@@ -7,7 +7,7 @@ Any MCP-compatible LLM agent can be brought under the governance stack
 of Papers 0–8 without a single line of agent-code modification.
 
 [![arXiv](https://img.shields.io/badge/arXiv-pending-orange)](https://arxiv.org)
-[![Zenodo](https://img.shields.io/badge/Zenodo-pending-blue)](https://zenodo.org)
+[![Zenodo](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.20162878-blue)](https://doi.org/10.5281/zenodo.20162878)
 [![Series](https://img.shields.io/badge/Series-P0--P9-lightgrey)](https://agentcontrolprotocol.xyz/research.html)
 [![Tests](https://img.shields.io/badge/tests-92%2F92-brightgreen)](#test-coverage)
 
