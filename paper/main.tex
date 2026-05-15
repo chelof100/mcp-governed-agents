@@ -973,7 +973,15 @@ are clearly distinguishable and correctly reported.
 
 \subsection{Setup}
 
-We validate T9.3 empirically through three sub-experiments.
+We validate T9.3 empirically through three sub-experiments under
+controlled multi-hop simulation aligned with current A2A draft
+semantics \citep{google2025a2a}. All delegation chains are
+instantiated within a single process using the proxy's
+\texttt{delegation\_chain} and \texttt{agent\_id} parameters;
+cross-vendor interoperability with live, heterogeneous A2A
+ecosystems is not claimed---the results establish formal and
+implementation feasibility pending ecosystem-wide protocol
+stabilisation.
 
 \emph{E3.A}: $10$ independent depth-1 chains ($A \to B$), $30$ steps each.
 \emph{E3.B}: $1$ depth-2 chain ($A \to B \to C$), $30$ steps each.
@@ -1276,11 +1284,18 @@ modifying the proxy architecture.
         $\Azero$. For newly launched agents, the initial $\Dhat$
         is conservative (low drift), meaning the first few calls
         of a genuinely malicious sequence may not trigger a halt.
-  \item \textbf{APBRequired is blocking.}
-        The current protocol blocks the tool call until the client
-        responds. A non-responsive client leads to indefinite hang.
-        A timeout extension to the protocol is straightforward and
-        left for future work.
+  \item \textbf{APBRequired prioritises safety over liveness.}
+        The current protocol deliberately blocks the tool call until
+        the client provides a signed APB: \emph{no authority, no
+        action}. This conservative posture is intentional and
+        appropriate for compliance-critical, financial, and
+        infrastructure deployments where silent execution is
+        unacceptable. The operational cost is that a non-responsive
+        client suspends session progress until explicit authority
+        resolution. Paper~10 will introduce timeout semantics,
+        escrow-state serialisation, and asynchronous approval queues
+        as a controlled relaxation of this safety bound while
+        preserving the core accountability guarantee.
   \item \textbf{Benchmark hardware and network conditions.}
         Latency measurements were collected on a single hardware
         configuration (i9-13900HX, 32\,GB RAM) under local,
