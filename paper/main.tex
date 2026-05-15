@@ -75,9 +75,9 @@
 \newcommand{\Dpolicy}{\Delta_{\mathrm{policy}}}
 
 % --- Title ---
-\title{\textbf{MCP-Native Identity-Bound Governance}\\[4pt]
-       \large Zero-Modification Agent Oversight via Protocol-Layer
-       Interception and Multi-Hop Authority Propagation}
+\title{\textbf{Protocol-Layer Governance for LLM Agents}\\[4pt]
+       \large Identity-Bound Oversight with Zero-Modification Deployment
+       and Multi-Hop Authority Propagation}
 
 \author{Marcelo Fernandez\\
         \small TraslaIA\\
@@ -145,7 +145,7 @@ authority substitution); adversary success rate $= 0\%$.
 \label{sec:intro}
 
 The \emph{Model Context Protocol} (MCP) \citep{anthropic2024mcp} has
-emerged as the de facto standard for connecting LLM-based agents to
+emerged as a widely adopted protocol for connecting LLM-based agents to
 external tools and data sources. An agent that speaks MCP can call any
 MCP-compatible server without custom integration; the protocol handles
 discovery, invocation, and result delivery uniformly. This uniformity
@@ -427,14 +427,15 @@ JSON-RPC notifications transmitted over the existing MCP transport.
 Standard MCP clients that do not implement the extension ignore them
 (Remark~\ref{rem:backward}).
 
-\begin{remark}[Backward Compatibility]
+\begin{remark}[Safe Failure Under Legacy Clients]
 \label{rem:backward}
 A standard MCP client that does not implement the P9 extension will
 treat $p9/\mathrm{apbRequired}$ as an unknown notification and ignore
 it per the JSON-RPC specification \citep{rfc8259}. The pending tool
 call will not receive a response, causing the client's call to time
 out. This is the appropriate behaviour: a non-P9-aware agent is
-halted, not silently resumed.
+halted, not silently resumed. The failure mode is therefore
+\emph{safe} (no unauthorised execution) rather than silent.
 \end{remark}
 
 \subsection{Multi-Hop Authority Delegation (A2A)}
@@ -900,9 +901,9 @@ The HALT condition adds only $\approx 10\,\si{\micro\second}$ over the ADMIT bas
 The passthrough baseline ($0.1\,\si{\micro\second}$ mean) isolates the pure
 dispatch overhead; the governance stack adds $\approx 46\,\si{\micro\second}$
 per call in the windowed configuration.
-This cost is two orders of magnitude below the minimum realistic LLM
-inference latency ($\approx 100\,\si{\milli\second}$ for small quantised models),
-confirming that governance at the MCP layer is not a practical bottleneck.
+This cost is orders of magnitude below typical local LLM inference
+latencies, confirming that governance at the MCP layer is not a
+practical bottleneck.
 
 The O($n$) accumulating monitor (\texttt{IMLMonitor}) achieves slightly
 lower P50 at short session lengths (36.7\,\si{\micro\second} vs.\
@@ -1280,6 +1281,14 @@ modifying the proxy architecture.
         responds. A non-responsive client leads to indefinite hang.
         A timeout extension to the protocol is straightforward and
         left for future work.
+  \item \textbf{Benchmark hardware and network conditions.}
+        Latency measurements were collected on a single hardware
+        configuration (i9-13900HX, 32\,GB RAM) under local,
+        in-process conditions ($\Dnet = 0$). Absolute latency values
+        will differ under cloud deployments, containerised proxies,
+        or cross-network configurations; the relative ordering of
+        ADMIT and HALT paths and the O(1) windowed-IML property are
+        hardware-independent.
 \end{enumerate}
 
 % =============================================================================
