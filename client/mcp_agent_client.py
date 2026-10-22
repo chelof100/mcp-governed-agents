@@ -25,7 +25,7 @@ from typing import Any, Callable
 
 from proxy.mcp_interceptor import MCPInterceptor, TOOL_RISK_01
 from proxy.protocol_extension import APBRequired, APBResponse
-from stack.apb import APB, GovernanceDecision, HumanDecisionBlock, SystemEvidenceBlock
+from stack.apb import APB, GovernanceDecision, HumanDecisionBlock, SystemEvidenceBlock, action_hash
 from stack.apb_verifier import verify_apb
 
 # Default mock tool results (mirrors toy_server.py responses)
@@ -144,7 +144,7 @@ class MCPAgentClient:
         # Filter out P9 delegation metadata (delegation_chain, originator) that
         # may be present for A2A sessions but are not part of the base E_s schema.
         _E_S_FIELDS = frozenset(
-            {"A_0_hash", "D_hat", "t_e", "trace_hash", "cause", "event_id"}
+            {"A_0_hash", "D_hat", "t_e", "trace_hash", "cause", "event_id", "action_hash"}
         )
         es_dict = {k: v for k, v in apb_req.evidence_summary.items()
                    if k in _E_S_FIELDS}
@@ -179,6 +179,11 @@ class MCPAgentClient:
             record["apb_verified"] = report.is_valid
 
             if decision == GovernanceDecision.RESUME:
+                # TOCTOU guard: execute only the call the principal's signature covers
+                if apb.E_s.action_hash != action_hash(tool_name, args):
+                    record["apb_rejected"] = "call differs from the signed action_hash"
+                    record["result"] = "[REJECTED] call differs from the signed action_hash"
+                    return record
                 record["result"] = self._executor(tool_name, args)
             else:
                 record["result"] = f"[{decision.value}]"

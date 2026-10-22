@@ -406,6 +406,63 @@ class TestHandleAPBResponse:
         assert outcome == "REJECTED"
         assert "malformed" in reason.lower()
 
+    # --- action commitment (what the signature covers) -----------------------
+
+    def test_evidence_commits_to_the_halted_call(self):
+        from stack.apb import action_hash
+        apb_req = self._get_pending_apb_required()
+        assert apb_req.evidence_summary["action_hash"] == action_hash(
+            "admin_action", {"action": "drop_db"}
+        )
+
+    def test_different_calls_get_different_commitments(self):
+        _, p1 = self.interceptor.intercept_tool_call("admin_action", {"action": "drop_db"})
+        _, p2 = self.interceptor.intercept_tool_call("admin_action", {"action": "vacuum"})
+        assert p1.evidence_summary["action_hash"] != p2.evidence_summary["action_hash"]
+
+    def test_apb_for_another_call_is_rejected(self):
+        """An APB signed for call 2 cannot resolve the halt of call 1."""
+        _, p1 = self.interceptor.intercept_tool_call("admin_action", {"action": "drop_db"})
+        _, p2 = self.interceptor.intercept_tool_call("admin_action", {"action": "vacuum"})
+        resp2 = self._build_apb_response(p2)
+        crossed = APBResponse(evidence_id=p1.evidence_id, apb_json=resp2.apb_json)
+        outcome, _ = self.interceptor.handle_apb_response(crossed)
+        assert outcome == "REJECTED"
+        assert p2.evidence_id in self.interceptor.pending_evidence_ids   # untouched
+
+    # --- V5 and V4 window ---------------------------------------------------
+
+    def test_duplicate_event_id_rejected_by_v5(self):
+        apb_req = self._get_pending_apb_required()
+        self.interceptor._seen_event_ids.add(apb_req.evidence_summary["event_id"])
+        outcome, reason = self.interceptor.handle_apb_response(self._build_apb_response(apb_req))
+        assert outcome == "REJECTED"
+        assert "DUPLICATE_EVENT_ID" in reason
+
+    def test_late_apb_rejected_by_v4_window_and_accepted_when_widened(self):
+        import time
+        # window shorter than the human's answer time -> V4 (REPLAY)
+        tight = MCPInterceptor(
+            registry=self.registry, H_id=self.H_id,
+            ram_gate=_AlwaysHaltRAM(), recovery_loop=_AlwaysPersistentHalt(),
+            apb_max_age_s=0.001,
+        )
+        _, req = tight.intercept_tool_call("admin_action", {"action": "drop_db"})
+        resp = self._build_apb_response(req)
+        time.sleep(0.05)
+        outcome, reason = tight.handle_apb_response(resp)
+        assert outcome == "REJECTED" and "REPLAY" in reason
+
+        wide = MCPInterceptor(
+            registry=self.registry, H_id=self.H_id,
+            ram_gate=_AlwaysHaltRAM(), recovery_loop=_AlwaysPersistentHalt(),
+            apb_max_age_s=3600.0,
+        )
+        _, req = wide.intercept_tool_call("admin_action", {"action": "drop_db"})
+        resp = self._build_apb_response(req)
+        time.sleep(0.05)
+        assert wide.handle_apb_response(resp)[0] == "RESOLVED"
+
     # --- E_s mismatch -----------------------------------------------------
 
     def test_es_mismatch_rejected(self):

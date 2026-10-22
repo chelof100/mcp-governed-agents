@@ -32,7 +32,7 @@ import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any
+from typing import Any, Optional
 
 import jcs  # RFC 8785 JSON Canonicalization Scheme
 
@@ -82,6 +82,15 @@ def hash_object(obj: Any) -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
+def action_hash(tool_call: str, args: dict[str, Any]) -> str:
+    """SHA-256 hex of the canonical (tool_call, args) pair.
+
+    P10: lets E_s commit to the exact suspended action, so the principal's
+    signature covers *what* is being authorized, not only that a halt occurred.
+    """
+    return hashlib.sha256(_canonical({"tool_call": tool_call, "args": args})).hexdigest()
+
+
 # ---------------------------------------------------------------------------
 # System Evidence Block (E_s)
 # ---------------------------------------------------------------------------
@@ -108,9 +117,16 @@ class SystemEvidenceBlock:
     cause: str          # e.g. "persistent_drift", "ram_unresolvable"
     event_id: str = field(default_factory=lambda: str(uuid.uuid4()))
                         # UUID4; unique per governance event (V5)
+    action_hash: Optional[str] = None
+                        # P10 (optional): action_hash(tool_call, args) of the suspended
+                        # call. Omitted from the canonical form when None, so P8/P9 APBs
+                        # serialize and verify exactly as before.
 
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        d = asdict(self)
+        if d["action_hash"] is None:
+            del d["action_hash"]
+        return d
 
     def to_canonical_bytes(self) -> bytes:
         return _canonical(self.to_dict())
@@ -225,6 +241,7 @@ def construct_evidence(
     cause: str,
     t_e: str | None = None,
     event_id: str | None = None,
+    action_hash: str | None = None,
 ) -> SystemEvidenceBlock:
     """Build E_s from runtime state. Construction is O(|A_0| + |trace|).
 
@@ -245,4 +262,5 @@ def construct_evidence(
         trace_hash=hash_object(trace),
         cause=cause,
         event_id=event_id or str(uuid.uuid4()),
+        action_hash=action_hash,
     )

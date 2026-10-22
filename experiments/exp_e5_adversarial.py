@@ -109,7 +109,7 @@ def _build_valid_apb(
 ) -> APB:
     """Build a correctly-constructed, properly-signed APB from an APBRequired."""
     _E_S_FIELDS = frozenset(
-        {"A_0_hash", "D_hat", "t_e", "trace_hash", "cause", "event_id"}
+        {"A_0_hash", "D_hat", "t_e", "trace_hash", "cause", "event_id", "action_hash"}
     )
     es_dict = {k: v for k, v in apb_req.evidence_summary.items()
                if k in _E_S_FIELDS}
@@ -165,7 +165,7 @@ def attack_a1_wrong_key() -> AttackResult:
 
     # Attacker: build APB claiming to be H_A but sign with sk_B
     _E_S_FIELDS = frozenset(
-        {"A_0_hash", "D_hat", "t_e", "trace_hash", "cause", "event_id"}
+        {"A_0_hash", "D_hat", "t_e", "trace_hash", "cause", "event_id", "action_hash"}
     )
     es_dict = {k: v for k, v in apb_req.evidence_summary.items()
                if k in _E_S_FIELDS}
@@ -217,7 +217,7 @@ def attack_a2_es_tampering() -> AttackResult:
 
     # Extract E_s, tamper with D_hat
     _E_S_FIELDS = frozenset(
-        {"A_0_hash", "D_hat", "t_e", "trace_hash", "cause", "event_id"}
+        {"A_0_hash", "D_hat", "t_e", "trace_hash", "cause", "event_id", "action_hash"}
     )
     es_dict = {k: v for k, v in apb_req.evidence_summary.items()
                if k in _E_S_FIELDS}

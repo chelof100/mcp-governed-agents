@@ -35,7 +35,7 @@ from typing import Any
 from agent.principal import PrincipalRegistry
 from iml.trace import Event, Trace
 from proxy.protocol_extension import APBRequired, APBResponse, APBRejected
-from stack.apb import APB, GovernanceDecision, SystemEvidenceBlock, construct_evidence
+from stack.apb import APB, GovernanceDecision, SystemEvidenceBlock, action_hash, construct_evidence
 from stack.apb_verifier import verify_apb
 from stack.iml_monitor import AdmissionSnapshotP7, IMLMonitor
 from stack.ram_gate import Authority, RAMGate
@@ -84,9 +84,15 @@ class MCPInterceptor:
         # (e.g. WindowedIMLMonitor) to swap the drift estimator implementation.
         # When None (default), IMLMonitor is constructed internally.
         iml_monitor: "IMLMonitor | None" = None,
+        # V4 freshness window for returned APBs. 300 s matches the synchronous verifier;
+        # raise it if the human may take longer than that to answer a blocking halt.
+        apb_max_age_s: float = 300.0,
     ) -> None:
         self.registry = registry
         self.H_id = H_id
+        self._apb_max_age_s = apb_max_age_s
+        # V5: event_ids of APBs already accepted (replay defence beyond the pending dict)
+        self._seen_event_ids: set[str] = set()
         self._risk_map = dict(risk_map or TOOL_RISK_01)
         # A2A delegation metadata: chain = [A_1, ..., A_n], originator = A_1
         self._agent_id = agent_id
@@ -196,6 +202,7 @@ class MCPInterceptor:
             trace=self._trace,
             cause=cause,
             t_e=t_e,
+            action_hash=action_hash(tool_name, args),   # signature covers WHAT is approved
         )
         evidence_id = uuid.uuid4().hex[:16]
         self._pending[evidence_id] = (E_s, tool_name, args)
@@ -251,7 +258,11 @@ class MCPInterceptor:
             return ("REJECTED", reason)
 
         # V1-V4 cryptographic verification
-        report = verify_apb(apb, self.registry)
+        report = verify_apb(
+            apb, self.registry,
+            max_age_seconds=self._apb_max_age_s,
+            seen_event_ids=self._seen_event_ids,
+        )
         if not report.is_valid:
             del self._pending[evidence_id]
             reason = f"APB verification failed: {report.result.value}"
