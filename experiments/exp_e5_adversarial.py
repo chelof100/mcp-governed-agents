@@ -480,6 +480,59 @@ def attack_a5_authority_substitution() -> AttackResult:
     )
 
 
+def attack_a6_cross_call_apb() -> AttackResult:
+    """A6: an APB the principal signed for halted call X is presented for halted call Y.
+
+    Attack surface: two calls are pending at once (the adversary or a
+    confused client mixes the responses).  Both E_s blocks are legitimate and
+    carry valid signatures; the APB for Y is replayed against X's evidence_id.
+    Defense: E_s equality against the evidence issued for that evidence_id (the
+    E_s carries action_hash, so the two blocks differ in tool/args as well as
+    event_id).  The other pending halt must remain untouched.
+    """
+    H_A = "human-HA"
+    registry, sk_A, _pk_A = _make_registry_and_principal(H_A)
+    interceptor = MCPInterceptor(registry=registry, H_id=H_A)
+
+    t0 = time.perf_counter_ns()
+    req_x = _force_halt(interceptor, seed=21)
+    req_y = None
+    for _ in range(100):
+        outcome, payload = interceptor.intercept_tool_call("admin_action", {"action": "drop_db"})
+        if outcome == "APB_REQUIRED":
+            req_y = payload
+            break
+    if req_y is None:
+        raise RuntimeError("could not obtain a second halt")
+
+    apb_y = _build_valid_apb(req_y, H_A, sk_A)
+    crossed = APBResponse(evidence_id=req_x.evidence_id, apb_json=apb_y.to_json())
+    status, result = interceptor.handle_apb_response(crossed)
+    t1 = time.perf_counter_ns()
+
+    y_untouched = req_y.evidence_id in interceptor.pending_evidence_ids
+    commitments_differ = (
+        req_x.evidence_summary.get("action_hash")
+        != req_y.evidence_summary.get("action_hash")
+    )
+    reason = result if status == "REJECTED" else ""
+    expected = "does not match issued evidence"
+    return AttackResult(
+        name="Cross-call APB (signed for another halted call)",
+        attack_id="A6",
+        rejected=(status == "REJECTED") and y_untouched and commitments_differ,
+        status=status,
+        reason=reason,
+        expected_keyword=expected,
+        keyword_found=expected in reason,
+        duration_us=(t1 - t0) / 1_000.0,
+        notes=(
+            f"call Y's pending halt untouched: {y_untouched}; "
+            f"action_hash differs between X and Y: {commitments_differ}."
+        ),
+    )
+
+
 # ── LaTeX table ────────────────────────────────────────────────────────────────
 
 def _latex_table(results: list[AttackResult]) -> str:
@@ -489,7 +542,7 @@ def _latex_table(results: list[AttackResult]) -> str:
         rejected_str = "Rejected" if r.rejected else "Accepted"
         rows += (
             f"  {r.attack_id} & "
-            f"\\textit{{{r.name.split('(')[0].strip()}}} & "
+            f"\\textit{{{r.name.split('(')[0].strip().replace('E_s', '$E_s$')}}} & "
             f"{rejected_str} & "
             f"{r.expected_keyword.replace('_', r'\_')} & "
             f"{ok} \\\\\n"
@@ -499,7 +552,7 @@ def _latex_table(results: list[AttackResult]) -> str:
         r"\begin{table}[h]" "\n"
         r"\centering" "\n"
         r"\caption{E5 --- Security adversarial suite. "
-        r"Five attack scenarios targeting the MCP governance proxy. "
+        r"Six attack scenarios targeting the MCP governance proxy. "
         r"All attacks must be rejected (adversary success rate $= 0$).}" "\n"
         r"\label{tab:e5-adversarial}" "\n"
         r"\begin{tabular}{llllc}" "\n"
@@ -526,6 +579,7 @@ def main() -> bool:
         ("A3", "APB replay",               attack_a3_replay),
         ("A4", "Revoked principal",        attack_a4_revoked_principal),
         ("A5", "Authority substitution",   attack_a5_authority_substitution),
+        ("A6", "Cross-call APB",           attack_a6_cross_call_apb),
     ]
 
     results: list[AttackResult] = []

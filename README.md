@@ -9,7 +9,7 @@ of Papers 0–8 without a single line of agent-code modification.
 [![arXiv](https://img.shields.io/badge/arXiv-pending-orange)](https://arxiv.org)
 [![Zenodo](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.20162878-blue)](https://doi.org/10.5281/zenodo.20162878)
 [![Series](https://img.shields.io/badge/Series-P0--P9-lightgrey)](https://agentcontrolprotocol.xyz/research.html)
-[![Tests](https://img.shields.io/badge/tests-92%2F92-brightgreen)](#test-coverage)
+[![Tests](https://img.shields.io/badge/tests-97%2F97-brightgreen)](#test-coverage)
 
 ---
 
@@ -29,9 +29,9 @@ proxy resumes, denies, or recalibrates per the signed decision.
 
 | # | Theorem | Result |
 |---|---------|--------|
-| T9.1 | Transparency Invariance — non-halt path observationally equivalent to direct connection | Windowed P95 = 51.8 µs << 10 ms gate ✓ |
-| T9.2 | Halt Latency Bound — governance event propagates within Δ_net + Δ_verify + Δ_policy | HALT pipeline mean = 57 µs (Δ_net = 0) ✓ |
-| T9.3 | Multi-Hop Authority Propagation — originator binding in A2A chains | 334 HALTs across depths 1–5, 100% originator=chain[0] ✓ |
+| T9.1 | Transparency on the non-halt path — holds by construction (stateless server, no halt) | not tested by E1/E2 (E1 is a latency threshold, 51.8 µs P95 in-process) |
+| T9.2 | Halt latency *decomposition* Δ_net + Δ_verify + Δ_policy (no bound on Δ_policy) | HALT pipeline mean = 57 µs in-process (Δ_net not measured) |
+| T9.3 | Multi-hop authority propagation, **under an explicit attribution axiom**; chain is unauthenticated | 334 HALTs across depths 1–5: configured chain copied into E_s (close to tautological) |
 
 ---
 
@@ -40,10 +40,10 @@ proxy resumes, denies, or recalibrates per the signed decision.
 | Exp | Scope | Key result |
 |-----|-------|------------|
 | **E1 — Latency overhead** | 10,000 ADMIT + 1,000 HALT calls | Windowed O(1) P95 = 51.8 µs; HALT mean = 57 µs |
-| **E2 — Real-agent APB** | 5 seeds × 200 steps (MockLLM) | 310 HALT / 21 DENY / 100% APB validity; T9.1 HOLD |
-| **E3 — Multi-hop A2A** | Depths 1–5, 5 runs/depth × 30 steps | 334 HALTs, 100% originator binding; T9.3 HOLD |
+| **E2 — APB pipeline, simulated agent** | 5 seeds × 200 steps (MockLLM, auto-approving human; live-LLM run not executed) | 310 HALT / 21 DENY / all APBs verify |
+| **E3 — Multi-hop A2A** | Depths 1–5, 5 runs/depth × 30 steps (chain = config parameter) | 334 HALTs, configured originator recorded 100% |
 | **E4 — Concurrency stress** | N∈{1,4,16,64} threads; N∈{1,4,8,16} processes | 0 exceptions, 100% APB validity across all N |
-| **E5 — Security adversarial suite** | 5 attack vectors | 0% adversary success rate; all 5 attacks rejected |
+| **E5 — Adversarial regression suite** | 6 author-written attacks (incl. cross-call APB) | all 6 rejected; a regression suite, not a security measurement |
 
 **APB verification gate**: 100% of all 344 APBs issued across E2+E3 pass V1–V5 (signature, principal, active, temporal, event-uniqueness).
 
@@ -68,7 +68,7 @@ proxy/                        ← P9 NEW: MCP-aware governance proxy
   mcp_interceptor.py          JSON-RPC middleware (IML→RAM→Recovery→APBRequired)
   governed_server.py          Wraps any MCP server with P7+P8 governance stack
   protocol_extension.py       p9/apbRequired, p9/apbResponse, p9/apbRejected
-  transport/{stdio,sse}.py    Async JSON-RPC helpers
+  transport/stdio.py          stdio helper (no HTTP+SSE implementation)
   toy_server.py               5-tool deterministic MCP server
 client/                       ← P9 NEW: in-process MCP agent session driver
   mcp_agent_client.py         Handles ADMIT/APBRequired→sign→RESUME/DENY paths
@@ -108,7 +108,7 @@ paper/
 
 ```bash
 pytest tests/ -q
-# 92 passed in ~8s
+# 97 passed
 # 61 inherited from P8 (APB, verifier, governance layer, principal)
 # 31 new P9 tests (protocol extension, interceptor ADMIT/HALT/DENY, APB response, A2A)
 ```

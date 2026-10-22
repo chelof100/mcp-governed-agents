@@ -58,6 +58,7 @@
 \newcommand{\ADMIT}{\texttt{ADMIT}}
 \newcommand{\Pset}{\mathcal{P}}
 \newcommand{\Es}{E_s}
+\newcommand{\ahash}{a_h}   % optional action commitment carried in E_s (hash of tool and args)
 \newcommand{\Dh}{D_h}
 \newcommand{\sigh}{\sigma_h}
 \newcommand{\Hi}{H_i}
@@ -104,40 +105,45 @@ We introduce the \emph{MCP Governance Proxy} ($\Proxy$), a stateful
 calls between any MCP-compatible agent client and any MCP server,
 applying the P7--P8 governance stack
 (IML\,+\,RAM\,+\,Recovery Loop\,+\,APB) transparently.
-No modification to the agent client or server is required;
-the proxy is a drop-in addition to the deployment topology.
+The design requires no modification to the agent client or server: the
+proxy is a drop-in addition to the deployment topology. (The evaluation
+drives the governance interceptor \emph{in-process}; it has not been run
+against a third-party MCP client---see \S\ref{sec:discussion}.)
 This positions governance at the protocol boundary rather than inside
-the agent---the same architectural move that service meshes make for
-microservice traffic and that zero-trust gateways make for API calls.
+the agent, in the manner of service meshes for microservice traffic.
 
-We prove three theorems.
-\emph{Transparency Invariance} (T9.1) establishes that on the non-halt
-path the proxy is observationally equivalent to a direct connection:
-the agent's tool-call results are unchanged.
-\emph{Halt Latency Bound} (T9.2) establishes that a governance event
-at the proxy propagates a halt signal to the agent within a latency
-bounded by $\Dnet + \Dverify + \Dpolicy$, all of which are small
-relative to LLM inference times.
-\emph{Multi-Hop Authority Propagation} (T9.3) establishes that in
-Agent-to-Agent (A2A) delegation chains, when a sub-agent's tool call
-triggers a governance event, the required APB has well-defined binding
-semantics: the accountable principal is the one registered for the
-\emph{originating} agent, and the delegation chain is recorded in
-the evidence block.
+We state three results.
+\emph{Transparency} (T9.1) states that on the non-halt
+path the proxy forwards requests and returns results unchanged; it
+holds by construction for a stateless server and is stated as such.
+\emph{Halt latency} (T9.2) decomposes the time to emit a halt into
+$\Dnet + \Dverify + \Dpolicy$; it is a decomposition, not a bound on
+$\Dpolicy$, which depends on the drift monitor. \emph{Multi-Hop
+Authority Propagation} (T9.3) states that, \emph{under an explicit
+attribution axiom}, in Agent-to-Agent (A2A) delegation chains the
+required APB is the one registered for the \emph{originating} agent,
+and the delegation chain is recorded in the evidence block. The chain
+itself is not authenticated (no delegator signs it); see the threat
+model.
 
-We validate the construction through five experiments.
-\emph{E1}~(latency overhead): $10{,}000$ governed tool calls; the
-O(1) windowed IML monitor achieves a P95 overhead of $51.8\,\si{\micro\second}$,
-well below the $10\,\si{\milli\second}$ T9.1 gate.
-\emph{E2}~(real-agent APB, $5$ seeds $\times$ $200$ steps): $310$ HALT events
-with $100\%$ APB validity; T9.1 holds.
-\emph{E3}~(multi-hop A2A, depths $1$--$5$): $334$ HALT events across all depths,
-$100\%$ originator binding; T9.3 holds for all chain lengths.
-\emph{E4}~(concurrency): $N \in \{1,4,16,64\}$ threads, $0$ exceptions,
-$100\%$ APB validity; true-parallel process mode validated up to $N=16$.
-\emph{E5}~(security adversarial suite): five attack vectors
-(wrong-key signing, evidence tampering, replay, revoked-principal,
-authority substitution); adversary success rate $= 0\%$.
+We evaluate the construction with five experiments, all in-process
+and with a simulated agent (\texttt{MockLLM}) and a simulated
+auto-approving human.
+\emph{E1}~(latency): $10{,}000$ governed calls; the windowed IML monitor
+has a P95 \emph{decision} overhead of $51.8\,\si{\micro\second}$ against an
+in-memory call (not the overhead of real stdio/JSON-RPC transport).
+\emph{E2}~(\texttt{MockLLM} agent, $5$ seeds $\times$ $200$ steps): $310$
+HALT events; every APB verifies. A live-LLM variant was not run.
+\emph{E3}~(multi-hop A2A, depths $1$--$5$): $334$ HALT events; the
+configured chain is copied into the evidence block in $100\%$ of cases.
+\emph{E4}~(concurrency, independent sessions): $N \in \{1,4,16,64\}$
+threads, $0$ exceptions.
+\emph{E5}~(adversarial regression suite): the attack vectors
+(wrong-key signing, evidence tampering, replay, revoked principal,
+authority substitution, and a cross-call APB) are rejected; this is a
+regression suite written by the author, not a measure of security.
+A revision note (\S\ref{sec:discussion}) lists what an audit of the first
+release found and what was changed or withdrawn.
 \end{abstract}
 
 % =============================================================================
@@ -178,26 +184,29 @@ party. Option~(b) is exactly what MCP enables.
   \item We define the \emph{MCP Governance Proxy} $\Proxy$ formally
         (\S\ref{sec:proxy}), giving its state, its per-call decision
         function, and its interaction with the P8 APB protocol extension.
-  \item We prove three theorems (\S\ref{sec:theorems}): Transparency
-        Invariance (T9.1), Halt Latency Bound (T9.2), and Multi-Hop
-        Authority Propagation (T9.3).
-  \item We provide a Python implementation on the official \texttt{mcp}
-        SDK (\S\ref{sec:impl}), supporting both stdio and HTTP+SSE
-        transports, with 92 tests (61 inherited from P7+P8, 31 new).
-  \item We validate the construction empirically through five experiments
+  \item We state three results (\S\ref{sec:theorems}): Transparency
+        (T9.1), a Halt Latency decomposition (T9.2), and Multi-Hop
+        Authority Propagation under an explicit attribution axiom (T9.3).
+  \item We provide a Python reference implementation on the official
+        \texttt{mcp} SDK (\S\ref{sec:impl}), stdio transport only, with
+        97 tests (61 inherited from P7+P8, 36 new).
+  \item We add one thing to P8's evidence block: an optional action
+        commitment $\ahash$ (hash of tool and arguments), so the
+        principal's signature covers \emph{what} is approved.
+  \item We evaluate the construction in-process with five experiments
         (\S\ref{sec:exp1}--\S\ref{sec:exp5}):
-        E1~latency overhead, E2~real-agent APB end-to-end,
-        E3~multi-hop A2A authority propagation (depths 1--5),
-        E4~concurrency stress (threads and processes), and
-        E5~security adversarial suite (five attack vectors rejected).
+        E1~decision overhead, E2~\texttt{MockLLM} agent with a simulated
+        human, E3~multi-hop A2A (depths 1--5), E4~concurrency, and
+        E5~an adversarial regression suite.
 \end{enumerate}
 
-\paragraph{Independence.}
-The formal framework, theorems, and experiments in this paper are
-self-contained; this paper can be read standalone assuming only
-\S\ref{sec:background}. P8's APB is used as an imported dependency
-(frozen baseline), not re-proved. Readers unfamiliar with P7 or P8
-will find the necessary definitions restated there.
+\paragraph{Relation to the series.}
+This paper builds on P7 (the governance stack) and P8 (the APB); \S\ref{sec:background}
+restates only what is needed to read the definitions here, and it is
+brief: the internals of IML, the RAM gate and the Recovery Loop are not
+re-derived, so judging \emph{what} the governance decision does requires
+P7. P10 \citep{fernandez2026nbg} removes the blocking behaviour recorded
+as Limitation~4.
 
 \paragraph{Roadmap.}
 \S\ref{sec:related} surveys related work.
@@ -294,16 +303,23 @@ From P8 \citep{fernandez2026ibg}, an APB signed by principal $\Hi$ is:
   \APB \;=\; (\Es,\;\Dh,\;\sigh)
 \]
 where $\Es = (\mathrm{hash}(\Azero),\,\Dhat(t_e),\,t_e,\,
-\mathrm{hash}(\text{trace}_{\le t_e}),\,\text{cause})$
+\mathrm{hash}(\text{trace}_{\le t_e}),\,\text{cause},\,\text{event\_id}
+[,\,\ahash])$
 is the system evidence block, $\Dh = (\Hi,\,\text{decision},\,
 \text{rationale},\,\text{scope})$ is the human decision block,
 and $\sigh = \mathrm{Sign}_{\ski}(\mathrm{canon}(\Es) \Vert
-\mathrm{canon}(\Dh))$ is the ed25519 signature.
+\mathrm{canon}(\Dh))$ is the ed25519 signature. The last field
+$\ahash = \mathrm{SHA\text{-}256}(\mathrm{JCS}(\{\text{tool},\,\text{args}\}))$
+is \emph{optional} and new here (it originates in P10): P8's $\Es$ does not say
+which call a halt concerns, so a signature did not cover \emph{what}
+was approved. When $\ahash$ is absent it is dropped from the canonical
+form, so P8 APBs are unchanged; the P9 proxy always sets it.
 
 A verifier checks five predicates V1--V5: (V1)~signature validity,
 (V2)~principal registered, (V3)~principal active at $t_e$,
 (V4)~$t_e$ within replay window, (V5)~event\_id not previously seen
-(replay resistance, introduced in P9).
+(replay resistance; part of the P8 verifier since its second version,
+which is the one published on arXiv).
 Theorems T8.1--T8.3 of P8 establish governance completeness,
 non-repudiability, and impossibility of anonymous re-authorisation.
 
@@ -407,35 +423,47 @@ On receiving call $c = (\text{name}, \text{args})$ in state $s$:
   \item If $d \in \{\HALT,\,\texttt{ESCALATE}\}$: construct
         $\Es = \mathrm{construct\_evidence}(s',\,\text{cause})$,
         assign $\text{eid} \gets \mathrm{fresh\_id}()$,
-        record $s'.\mathcal{E}_\text{pend}[\text{eid}] \gets \Es$,
-        emit notification $p9/\mathrm{apbRequired}(\Es,\,\text{eid})$ to client.
+        record $s'.\mathcal{E}_\text{pend}[\text{eid}] \gets \Es$
+        (with $\ahash$ set to the hash of the halted call),
+        signal the halt to the client as $p9/\mathrm{apbRequired}(\Es,\,\text{eid})$.
+        \emph{The wire form of this signal is specified here but not
+        implemented}: see \S\ref{sec:impl}.
   \item If $d = \DENY$: return $\mathrm{GOVERNANCE\_DENY}$.
 \end{enumerate}
 On receiving $p9/\mathrm{apbResponse}(\text{eid},\,\APB)$:
 \begin{enumerate}[leftmargin=2em, topsep=2pt, itemsep=1pt]
   \item Retrieve $E_{s,\mathrm{exp}} = s.\mathcal{E}_\text{pend}[\text{eid}]$.
   \item Verify $\APB.\Es = E_{s,\mathrm{exp}}$ and $\mathrm{verify}(\APB, \Pset)$.
-  \item If valid: remove from pending, execute $\APB.\Dh.\text{decision}$.
+  \item If valid: remove from pending, execute $\APB.\Dh.\text{decision}$;
+        a $\RESUME$ is applied only to the call whose hash equals
+        $\APB.\Es.\ahash$ (the reference client refuses to execute any other).
   \item If invalid: emit $p9/\mathrm{apbRejected}(\text{eid},\,\text{reason})$.
 \end{enumerate}
 \end{definition}
 
-\paragraph{Protocol extension.}
+\paragraph{Protocol extension (specified, not implemented on the wire).}
 The three custom message types $p9/\mathrm{apbRequired}$,
-$p9/\mathrm{apbResponse}$, and $p9/\mathrm{apbRejected}$ are
-JSON-RPC notifications transmitted over the existing MCP transport.
-Standard MCP clients that do not implement the extension ignore them
+$p9/\mathrm{apbResponse}$, and $p9/\mathrm{apbRejected}$ are specified
+as JSON-RPC notifications over the MCP transport
+(\texttt{proxy/protocol\_extension.py} defines their serialisation).
+\emph{The reference implementation does not send them as notifications.}
+It encodes the halt in the \emph{result} of the tool call
 (Remark~\ref{rem:backward}).
 
-\begin{remark}[Safe Failure Under Legacy Clients]
+\begin{remark}[Behaviour Under Legacy Clients]
 \label{rem:backward}
-A standard MCP client that does not implement the P9 extension will
-treat $p9/\mathrm{apbRequired}$ as an unknown notification and ignore
-it per the JSON-RPC specification \citep{rfc8259}. The pending tool
-call will not receive a response, causing the client's call to time
-out. This is the appropriate behaviour: a non-P9-aware agent is
-halted, not silently resumed. The failure mode is therefore
-\emph{safe} (no unauthorised execution) rather than silent.
+In the reference implementation a halted call is \emph{not} forwarded to
+the server; the proxy returns a text result
+(\texttt{[GOVERNANCE\_HALT] evidence\_id=\ldots}). A standard MCP client
+therefore sees the call \emph{complete} with that text. The governed
+tool is not executed, so no unauthorised execution occurs; but the
+client is not blocked or timed out as an earlier version of this paper
+claimed, and the agent may read the text, retry (each retry is governed
+again and may create a further pending halt) or continue without the
+action. Whether the agent surfaces the halt to a human then depends on
+the agent, not on the proxy. A wire-level $p9/\mathrm{apbRequired}$ that
+blocks the call until a response or timeout is the intended design and
+is future work.
 \end{remark}
 
 \subsection{Multi-Hop Authority Delegation (A2A)}
@@ -478,10 +506,25 @@ operating under that agent's authority.
 \section{Theorems}
 \label{sec:theorems}
 
-\subsection{T9.1\,---\,Transparency Invariance}
+\subsection{T9.1\,---\,Transparency on the Non-Halt Path}
 \label{sec:t91}
 
-\begin{theorem}[Transparency Invariance]
+\begin{remark}[Status of T9.1]
+T9.1 holds \emph{by construction}: it restates step~2 of
+Definition~\ref{def:proxy}. Its content is the design commitment that
+the proxy never alters an admitted call or its result. It makes three
+restrictions explicit. (i)~$\mathcal{S}$ is a function of the call alone;
+for a stateful or non-deterministic server the statement applies to
+\emph{identical server behaviour} on the forwarded calls, and calls that
+are halted are \emph{not} forwarded, so the server's state can then
+differ from a direct connection's. (ii)~The hypothesis ($\ADMIT$ for
+every call) excludes the halt path, which is where a client unaware of
+P9 is affected (Remark~\ref{rem:backward}). (iii)~The experiments do not
+test T9.1: the latency gate of E1 is a performance threshold, and E2
+checks only that every halt ends in an APB.
+\end{remark}
+
+\begin{theorem}[Transparency on the Non-Halt Path]
 \label{thm:transparency}
 Let $\tau = (c_1, \ldots, c_n)$ be a sequence of tool calls processed
 by proxy $\Proxy$ in session state $s_0$, such that
@@ -494,7 +537,9 @@ trace produced by a direct connection to the server:
 \end{theorem}
 
 \begin{proof}
-By induction on $n$.
+Each step is independent of the others, so the argument is the same for
+every $n$ (no induction hypothesis is needed); we give the case $n=1$
+and the general step.
 
 \emph{Base case} ($n=1$).
 Call $c_1 = (\text{name}, \text{args})$ with $d_1 = \ADMIT$.
@@ -540,14 +585,26 @@ path (bounded in T9.2) but produces no semantic difference in the
 tool-call results.
 \end{remark}
 
-\subsection{T9.2\,---\,Halt Latency Bound}
+\subsection{T9.2\,---\,Halt Latency Decomposition}
 \label{sec:t92}
 
-\begin{theorem}[Halt Latency Bound]
+\begin{remark}[Status of T9.2]
+T9.2 is a \emph{decomposition}: the total is the sum of the three terms
+it defines, and it gives no bound on $\Dpolicy$. That term depends on
+the drift monitor (the default EMA monitor recomputes over the trace,
+$O(|\tau|)$; the windowed monitor is $O(\text{window})$) and the RAM
+Gate and Recovery Loop draw pseudo-random numbers, so $\Dpolicy$ is
+random and is characterised only empirically (E1). The time to
+\emph{validate} an APB runs after the human's answer, so it is not part
+of the time to reach the halt. We keep the statement for the structure it
+shows, not as a guarantee.
+\end{remark}
+
+\begin{theorem}[Halt Latency Decomposition]
 \label{thm:latency}
 Let $c$ be a tool call that triggers a governance event at the proxy
-at time $t_0$. The agent receives the halt signal (via
-$p9/\mathrm{apbRequired}$ or an error response) no later than
+at time $t_0$. The agent receives the halt signal (in the reference
+implementation, as the tool result; see Remark~\ref{rem:backward}) no later than
 \[
   t_0 + \Dpolicy + \Dnet,
 \]
@@ -611,18 +668,39 @@ The sum of five $O(1)$ operations is $O(1)$.
 Experiment~E1 (\S\ref{sec:exp1}) measures the windowed ADMIT path at
 mean $46.5\,\si{\micro\second}$ and the HALT path at mean
 $57.0\,\si{\micro\second}$, so $\Dpolicy + \Dverify \approx 57\,\si{\micro\second}$.
-With $\Dnet = 0$ (local in-process), the total bound
-$\Delta_\text{halt} \approx 57\,\si{\micro\second}$.
-In a network-separated deployment with $\Dnet \approx 5\,\si{\milli\second}$
-(LAN), the total bound remains $\approx 5.06\,\si{\milli\second}$, negligible
-relative to LLM inference latencies
-($\approx 100\,\si{\milli\second}$ to $\approx 25\,\si{\second}$).
+E1 calls the interceptor as a Python function, so it measures the
+\emph{decision} cost and not stdio/JSON-RPC serialisation, process
+switches or the network; with $\Dnet$ absent the figure is
+$\Delta_\text{halt} \approx 57\,\si{\micro\second}$. If one
+\emph{assumes} a LAN term $\Dnet \approx 5\,\si{\milli\second}$ (not measured here),
+the sum would be $\approx 5.06\,\si{\milli\second}$, small against LLM
+inference latencies ($\approx 100\,\si{\milli\second}$ to $\approx 25\,\si{\second}$).
+A real transport measurement is future work.
 \end{remark}
 
 \subsection{T9.3\,---\,Multi-Hop Authority Propagation}
 \label{sec:t93}
 
-\begin{theorem}[Multi-Hop Authority Propagation]
+\begin{remark}[What T9.3 does and does not establish]
+The attribution of accountability to the originator is an
+\emph{assumption of the model}, not something derived from the series'
+earlier results. The first release justified it with DC.1 (immutability
+of the baseline), which is unrelated to who is accountable. We now state
+it as an axiom and prove the rest from it.
+\end{remark}
+
+\begin{description}[leftmargin=2em, topsep=2pt]
+  \item[AX9.1 (Attribution to the originator).]
+        The principal accountable for a governance event raised by
+        $A_n$ in chain $\chain$ is a principal registered for
+        $A_1 = \orig(\chain)$; sub-agents $A_i$ ($i>1$) are not
+        principals in their own right.
+  \item[AX9.2 (Trusted chain record).]
+        The delegation events in the trace are written by a component
+        the adversary cannot influence.
+\end{description}
+
+\begin{theorem}[Multi-Hop Authority Propagation, under AX9.1--AX9.2]
 \label{thm:multihop}
 Let $\chain = (A_1, A_2, \ldots, A_n)$ be a delegation chain and
 $c$ a tool call by $A_n$ that triggers a governance event at
@@ -643,7 +721,8 @@ the proxy governing $A_n$'s tool calls. Then:
 \end{theorem}
 
 \begin{proof}
-We prove the four parts by case analysis on chain depth $n$.
+We prove the four parts by case analysis on chain depth $n$. The
+argument for $n>1$ is direct; nothing is carried over from depth $n-1$.
 
 \emph{Case $n = 1$ (degenerate, no delegation).}
 $\chain = (A_1)$, $\orig(\chain) = A_1$.
@@ -656,13 +735,9 @@ uniqueness is vacuous, $A_1$ is trivially well-defined, and the
 principal attribution is to $A_1$'s principal set. \checkmark
 
 \emph{Case $n > 1$ (delegation present).}
-By induction on $n$.
-
-\emph{Inductive step.}
-Assume the theorem holds for chains of depth $n-1$.
 Consider chain $\chain = (A_1, A_2, \ldots, A_n)$.
 
-(a) \emph{Canonicality of $\chain$}.
+(a) \emph{Canonicality of $\chain$} (using AX9.2).
 By Lemma~\ref{lem:l931}, the delegation chain is determined by the
 IML trace prefix $\tau_{\le t_e}$. Since the trace is append-only and
 each delegation event carries a unique event\,id and source/target
@@ -676,23 +751,28 @@ that $A_0 \delegateto A_1$ appears in the trace.
 By (a), this agent is unique. \checkmark
 
 (c) \emph{Principal accountability.}
-$A_n$ executes the tool call under authority delegated through
-the chain. The chain terminates at $A_1$, which is the agent whose
-principal authorised the initiation of the entire task sequence.
-By DC.1 (inherited from P7), no sub-agent $A_i$ ($i > 1$) is a
-member of the governed principal set $\Pset$ independently of
-its originator; sub-agents operate under derived, not direct,
-authority. Therefore the re-authorisation decision must come from
-$\Pset_{A_1}$, and the required $\Dh.\Hi \in \Pset_{A_1}$.
-
-By the inductive hypothesis applied to the prefix chain
-$(A_1, \ldots, A_{n-1})$: the governance events of $A_{n-1}$
-require $\Dh.\Hi \in \Pset_{A_1}$. Because $A_n$'s authority is
-derived from $A_{n-1}$'s (which is derived from $A_1$'s), the
-same principal set applies. \checkmark
-
-Parts (a)--(c) holding for $n$ completes the induction. \checkmark
+By AX9.1, the principal accountable for a governance event raised by
+$A_n$ is registered for $A_1$. The proxy therefore requires
+$\Dh.\Hi \in \Pset_{A_1}$ (this is Definition~\ref{def:mhapb}; the
+reference implementation enforces it with the
+\texttt{allowed\_H\_ids} check, \S\ref{sec:exp3}). This is a
+consequence of the axiom, not an independent derivation: the theorem
+records that the rule is well-defined and recorded in $\Es$, and
+\emph{not} that it is the right accountability rule. \checkmark
 \end{proof}
+
+\begin{remark}[Limits of T9.3]
+(i)~The chain is \emph{unauthenticated}: no delegator signs the
+delegation, and in the reference implementation the chain is a
+configuration parameter of the interceptor, so E3 checks that a
+configured value is copied into $\Es$. A malicious sub-agent that
+declares a false chain can divert accountability to another principal;
+authenticated delegation (a signature by each delegator over the next
+hop, as in capability or credential chaining) is future work. (ii)~Only
+linear chains are covered: branching (A1 delegating to A2 and A3),
+cycles and re-delegation with reduced scope are not modelled.
+(iii)~Depth $>2$ in E3 uses synthetic chains.
+\end{remark}
 
 \begin{lemma}[Delegation Chain Canonicalization]
 \label{lem:l931}
@@ -735,7 +815,9 @@ It consists of four layers:
   \item[Frozen baseline (P7+P8).]
         Modules \texttt{agent/}, \texttt{stack/}, \texttt{iml/},
         and \texttt{baselines/} are copied verbatim from P8's
-        repository and not modified. All 61 P8 tests pass.
+        repository. One change: \texttt{stack/apb.py} gains the optional
+        field $\ahash$ of $\Es$ (absent $\Rightarrow$ omitted from the
+        canonical form, so P8 APBs are unchanged). All 61 P8 tests pass.
   \item[Proxy layer (P9 new).]
         \texttt{proxy/mcp\_interceptor.py}: the \texttt{MCPInterceptor}
         class, one instance per session, runs IML\,$\to$\,RAM\,$\to$\,
@@ -744,21 +826,25 @@ It consists of four layers:
   \item[Protocol extension.]
         \texttt{proxy/protocol\_extension.py}: dataclasses for
         $p9/\mathrm{apbRequired}$, $p9/\mathrm{apbResponse}$, and
-        $p9/\mathrm{apbRejected}$ with JSON-RPC serialisation.
+        $p9/\mathrm{apbRejected}$ with JSON-RPC serialisation (used by the
+        in-process driver; not sent over a transport).
   \item[Server entry point.]
         \texttt{proxy/governed\_server.py}: \texttt{GoverningProxy}
-        wraps any MCP server via FastMCP, connecting as a client to
-        the real server (stdio subprocess) while serving the upstream
-        client on its own stdio.
+        wraps an MCP server via FastMCP, connecting as a client to the
+        real server (stdio subprocess) while serving the upstream client
+        on its own stdio. It hard-codes the five tools of the toy
+        server and encodes a halt as a text result
+        (Remark~\ref{rem:backward}). \emph{No test and no experiment
+        exercises it}: all experiments call the interceptor directly.
 \end{description}
 
 \subsection{Transports}
 
-Two transports are supported:
-\textbf{stdio} (for local agents such as Claude Code and Cline)
-and \textbf{HTTP+SSE} (for remote servers).
-The stdio transport is implemented in Sprint~1; SSE support
-is added in Sprint~3 alongside Experiment~E1.
+Only a \textbf{stdio} entry point exists, and it is untested. There is
+\emph{no} HTTP+SSE implementation, and the reference implementation has
+not been run against a third-party MCP client (for example Claude
+Desktop or Cline) or against a public MCP server; the ``drop-in''
+claim is a property of the design, not a demonstrated one.
 
 \subsection{Tool Risk Map}
 
@@ -858,13 +944,13 @@ in every \texttt{APBRequired} evidence block.
 
 \subsection{Test Coverage}
 
-The test suite consists of 92 tests:
+The test suite consists of 97 tests:
 61 inherited from P8 (covering APB construction, verification, and
-the governance layer), and 31 new tests covering the proxy layer
+the governance layer), and 36 new tests covering the proxy layer
 (protocol extension serialisation, interceptor ADMIT/HALT/DENY paths,
-APBResponse handling with valid and invalid APBs, and session
-lifecycle).
-All 92 pass.
+APBResponse handling with valid and invalid APBs, session lifecycle,
+the action commitment, V5, and the V4 window).
+All 97 pass.
 
 % =============================================================================
 \section{Experiment~E1: Latency Overhead}
@@ -892,9 +978,14 @@ Calls per condition: $10{,}000$ (ADMIT), $1{,}000$ (HALT).
 \noindent
 Table~\ref{tab:e1-overhead} reports all four conditions.
 The \emph{windowed} O(1) monitor achieves P95\,=\,$51.8\,\si{\micro\second}$
-on an indefinite-length session, satisfying the T9.1 gate (P95\,$<$\,$10\,\si{\milli\second}$).
-The HALT condition adds only $\approx 10\,\si{\micro\second}$ over the ADMIT baseline
-($57.0\,\si{\micro\second}$ vs.\ $46.5\,\si{\micro\second}$ mean), confirming T9.2.
+on an indefinite-length session, below the (arbitrary) latency threshold of
+$10\,\si{\milli\second}$ that we use as a gate; this is a performance gate and
+says nothing about T9.1. The HALT condition adds only
+$\approx 10\,\si{\micro\second}$ over the ADMIT baseline
+($57.0\,\si{\micro\second}$ vs.\ $46.5\,\si{\micro\second}$ mean), consistent
+with the decomposition of T9.2. One machine, one run per condition, no
+confidence intervals; the windowed condition has outliers (maximum
+$21.4\,\si{\milli\second}$) that the P95 hides.
 
 \subsection{Discussion}
 
@@ -921,21 +1012,24 @@ We adopt the \texttt{WindowedIMLMonitor} as the default in all subsequent
 experiments.
 
 % =============================================================================
-\section{Experiment~E2: Real-Agent APB}
+\section{Experiment~E2: APB Pipeline with a Simulated Agent}
 \label{sec:exp2}
 
 \subsection{Setup}
 
-We validate end-to-end APB governance through the governance proxy,
-covering the full HALT\,$\to$\,APBRequired\,$\to$\,RESUME path
-as well as the permanent-DENY path.
+We exercise the APB pipeline through the interceptor, covering the
+HALT\,$\to$\,APBRequired\,$\to$\,RESUME path as well as the permanent-DENY
+path. The agent is a \texttt{MockLLM} and the human is simulated: the
+client signs every APB automatically (\texttt{auto\_decision="RESUME"}).
+This is a test of the pipeline, not of a real agent or a real approver.
 
 \textbf{Sub-experiments:}
 \emph{E2.A} uses \texttt{MockLLM} (deterministic, $5$ seeds $\times$ $200$ steps
 per seed; $50$ burn-in\,$+$\,$150$ drift).
-\emph{E2.B} uses a live Ollama LLM (\texttt{mistral:7b}); skipped when
-Ollama is unavailable.
-\textbf{Governance outcome taxonomy (P9 §3.2):}
+\emph{E2.B} would use a live Ollama LLM (\texttt{mistral:7b}); \textbf{it was
+not run} (the stored result is \texttt{null}), so the paper reports no
+live-LLM result.
+\textbf{Governance outcome taxonomy used here:}
 ADMIT (forwarded directly),
 APB\_REQUIRED (HALT\,$\to$\,signed APB\,$\to$\,RESUME),
 DENY (permanent RAM-gate denial, no APB).
@@ -946,9 +1040,12 @@ DENY (permanent RAM-gate denial, no APB).
 
 \noindent
 Across $1{,}000$ total steps (E2.A), the proxy issued $310$ HALT events
-(APB\_REQUIRED), all resolved via signed APB (RESUME), confirming
-T9.1 Transparency Invariance.
-All $310$ APBs pass V1--V5 cryptographic verification ($100\%$).
+(APB\_REQUIRED), all resolved via signed APB (RESUME). The $31\%$ halt
+rate is a consequence of how the \texttt{MockLLM} drifts, not an
+estimate of a real agent's.
+All $310$ APBs pass V1--V5 cryptographic verification ($100\%$), which
+shows that locally signed APBs verify; there is no variability to
+measure here.
 The mean $\widehat{D}$ at first halt is $0.382$, consistent with the
 $50$-step burn-in establishing $\mathcal{A}_0$ before drift accumulates.
 $21$ permanent DENY events occur (high-risk tools under DENY authority
@@ -1005,21 +1102,20 @@ All $334$ APBs pass V1--V5 verification.
 
 \subsection{Discussion}
 
-T9.3 property (a) (canonicality of chain) is confirmed: the
-\texttt{delegation\_chain} parameter is faithfully recorded in every
-APBRequired, regardless of chain depth.
-T9.3 property (b) (well-definedness of originator) is confirmed:
-$\texttt{originator} = \text{chain}[0]$ in $100\%$ of $334$ events
-across depths 1--5.
-The HALT counts per depth ($66,66,68,65,69$) are statistically uniform
-(coefficient of variation $2.2\%$), indicating that chain depth does not
-influence the drift-triggering dynamics, as expected: the drift estimator
-operates on the sub-agent's tool-call trace, not on the chain structure.
+What E3 checks is narrow. The chain is a configuration parameter of
+the interceptor, so the experiment verifies that the configured chain
+is copied into every APBRequired and that $\texttt{originator} =
+\text{chain}[0]$ in $100\%$ of $334$ events across depths 1--5; the
+equality is close to tautological. The HALT counts per depth
+($66,66,68,65,69$; coefficient of variation $2.2\%$) are roughly
+uniform, as expected, since the drift estimator operates on the
+sub-agent's trace and not on the chain structure; this is a descriptive
+figure, not a statistical test.
 
-This result directly validates T9.3(b,c): the accountability of a
-governance event attaches to the originating agent's principal,
-independent of how many delegation hops separate the originator from
-the tool-calling agent.
+E3 does \emph{not} validate AX9.1 or AX9.2, and it does not test an
+adversary who forges the chain (the chain is unauthenticated). It
+supports that the proxy \emph{implements} the rule of
+Definition~\ref{def:mhapb}, together with the confinement check of E5-A5.
 
 % =============================================================================
 \section{Experiment~E4: Concurrency Stress}
@@ -1056,11 +1152,12 @@ short sessions ($200$ steps per session).
 
 \subsection{Discussion}
 
-The critical governance correctness result is that \textbf{no exceptions
-and no APB-validity failures occur at any concurrency level or mode}.
-Session-state isolation is maintained: each \texttt{MCPInterceptor}
-instance is independent, so concurrent sessions never share drift state,
-pending APBs, or principal registry.
+No exceptions and no APB-validity failures occur at any concurrency
+level or mode. This is a consequence of the design rather than a
+finding: each \texttt{MCPInterceptor} instance is independent, so
+concurrent sessions share no drift state or pending APBs. The
+interesting case, many sessions contending for a \emph{shared} registry
+or log, is not tested.
 
 The sub-linear thread scaling is expected: the proxy's governance
 computation (IML JSD + RAM pseudo-random draws) is CPU-bound Python,
@@ -1069,23 +1166,28 @@ For I/O-bound agents (where LLM inference dominates) this is not a
 bottleneck: the $\approx 2{,}800$ calls/s thread throughput exceeds the
 tool-call rate of any realistic LLM agent by two to three orders of magnitude.
 
-The process-mode IPC overhead (lower throughput than thread mode) is a
-Windows-specific artefact of the pickle-serialised worker pool.
-On Linux, \texttt{fork} semantics eliminate this overhead, and process
-mode is expected to scale near-linearly up to the core count.
+The process-mode throughput is lower than thread mode's. We attribute
+this to the pickle-serialised worker pool on Windows, and we
+\emph{conjecture} that with \texttt{fork} on Linux the overhead
+disappears and the mode scales close to linearly; we have not measured
+it on Linux.
 
 % =============================================================================
-\section{Experiment~E5: Security Adversarial Suite}
+\section{Experiment~E5: Adversarial Regression Suite}
 \label{sec:exp5}
 
 \subsection{Setup}
 
-We test five attack scenarios targeting the governance proxy's APB
+We test six attack scenarios targeting the governance proxy's APB
 verification pipeline.
 Each attack attempts to bypass the governance halt or inject an
 unauthorized resume decision.
-The proxy must reject all five with a specific, distinguishable error
-message.
+The proxy must reject all six with a specific, distinguishable error
+message. The attacks were written by the author, each against the
+predicate the design already expects; the suite is a regression test of
+those defences. It contains no adaptive attacker, no fuzzing and no model
+of an adversary's capabilities, so it is not evidence that the proxy is
+secure.
 
 \begin{description}[leftmargin=2em, topsep=2pt, itemsep=2pt]
   \item[A1 (Wrong-key signing).]
@@ -1115,7 +1217,15 @@ message.
         (only the originator's principal may authorize).
         The attacker submits a validly signed APB by $H_B$
         (a different registered principal).
-        Expected rejection: authority confinement violation (P9 §4.7).
+        Expected rejection: authority confinement violation (the
+        \texttt{allowed\_H\_ids} check).
+  \item[A6 (Cross-call APB).]
+        Two calls are pending. The APB the principal signed for call~$Y$
+        is presented against the evidence\_id of call~$X$. Both are
+        legitimate and validly signed; only the call differs.
+        Expected rejection: $\Es$ mismatch (the two blocks differ in
+        \texttt{event\_id} and in $\ahash$), with $Y$'s pending halt left
+        untouched.
 \end{description}
 
 \subsection{Results}
@@ -1123,11 +1233,8 @@ message.
 \input{../results/exp_e5/exp_e5_table.tex}
 
 \noindent
-All five attacks are rejected (Table~\ref{tab:e5-adversarial}).
-Adversary success rate $= 0\%$.
-Each rejection carries the correct distinguishing predicate,
-confirming that the verification pipeline correctly routes failures
-to the appropriate predicate.
+All six attacks are rejected (Table~\ref{tab:e5-adversarial}), each with
+the distinguishing message the design predicts.
 
 \subsection{Discussion}
 
@@ -1146,8 +1253,12 @@ re-signed tampered APB is rejected at this step.
 Each evidence\_id is consumed on first acceptance and deleted from the
 pending map.
 Replaying a used evidence\_id against an empty pending slot returns
-``unknown evidence\_id''.
-This implements V5 of the extended verifier.
+``unknown evidence\_id''. In this suite the rejection therefore comes
+from the pending map, \emph{not} from V5. The first release stated that
+V5 was applied but called the verifier without a seen-event set, so V5
+never ran; it now does (a unit test covers it). The seen-event set lives in
+memory and is lost when the interceptor restarts, as does the pending
+map, so neither survives a restart.
 
 \paragraph{A4 (Revoked principal).}
 The registry marks revoked principals with an \texttt{is\_active=False}
@@ -1156,7 +1267,7 @@ Revocation is permanent and non-reversible in the current implementation,
 consistent with P8 §5.3.
 
 \paragraph{A5 (Authority confinement).}
-The \texttt{allowed\_H\_ids} mechanism (P9 §4.7) enforces that only
+The \texttt{allowed\_H\_ids} mechanism enforces that only
 the originator's registered human principal may authorize governance
 events in a delegation chain.
 This prevents a sub-agent's principal from usurping governance authority
@@ -1202,7 +1313,7 @@ Revocation of a principal is immediate and permanent.
 Any APB signed by a revoked principal is rejected at V3.
 E5-A4 confirms this.
 
-\paragraph{Authority confinement under A2A delegation (P9 §4.7).}
+\paragraph{Authority confinement under A2A delegation.}
 In a delegation chain, the \texttt{allowed\_H\_ids} set restricts which
 human principals may authorise governance events.
 This prevents lateral authority injection: a principal registered for a
@@ -1210,18 +1321,17 @@ sub-agent cannot usurp the originator's governance authority.
 E5-A5 confirms this.
 
 \paragraph{Remaining attack surface.}
-Two attack classes remain out of scope of this paper:
-\emph{A6}~(compromised proxy process) and
-\emph{A7}~(colluding proxy and principal), both discussed in
-\S\ref{sec:threats}.
-These require infrastructure-level mitigations (code signing,
-attestation, audit logs) rather than cryptographic protocol extensions.
+The adversaries M1--M7 of \S\ref{sec:threats} are not covered by E5.
+M1 and M2 need infrastructure-level mitigations (code signing,
+attestation, audit logs); the others are open.
 
 \subsection{Production Deployment}
 
-The proxy can be inserted at any point in a production MCP deployment
-topology without modifying the agent client or the tool server.
-Typical insertion points are: between the agent and its tool server
+By design the proxy can be inserted into an MCP deployment topology
+without modifying the agent client or the tool server; this has not
+been demonstrated against a third-party client or server, and it
+presupposes that the proxy is the only path to the server (M3).
+Candidate insertion points are: between the agent and its tool server
 in a single-host deployment; or at the network boundary (reverse
 proxy) in a cloud deployment. In the latter case, the proxy runs as
 a sidecar service, and $\Dnet$ reflects a real network hop.
@@ -1242,7 +1352,7 @@ Inserting the proxy at the MCP layer introduces two new actor classes
 relative to the P8 threat model:
 
 \begin{description}[leftmargin=2em, topsep=2pt]
-  \item[A6. Compromised proxy process.]
+  \item[M1. Compromised proxy process.]
         The proxy is a process with access to the MCP stream and the
         per-session governance state. It does not hold any principal's
         $\ski$. An attacker who compromises the proxy can: (i)~drop
@@ -1251,11 +1361,43 @@ relative to the P8 threat model:
         forwarding, or (iii)~suppress tool results. Mitigations:
         proxy integrity (code signing, attestation), and monitoring of
         the APB log.
-  \item[A7. Colluding proxy + principal.]
+  \item[M2. Colluding proxy + principal.]
         If the proxy process and the principal collude, the principal
         can sign arbitrary $\Dh$ blocks, and the proxy forwards the
         results. The APB still records the decision non-repudiably
         (T8.2 holds), so the collusion is detectable in post-hoc audit.
+\end{description}
+
+The following adversaries are \emph{not} modelled by E5 and are
+open; an MCP-security reviewer will ask about each:
+\begin{description}[leftmargin=2em, topsep=2pt]
+  \item[M3. Proxy bypass.]
+        Nothing in the design forces traffic through the proxy. An agent
+        or attacker that connects directly to the MCP server is
+        ungoverned; ``drop-in'' is only as strong as the network
+        topology that makes the proxy the sole path to the server.
+  \item[M4. Time-of-check/time-of-use on the approved call.]
+        P8's evidence block did not say which call a halt concerns, so a
+        signature approved \emph{that a halt occurred}, not \emph{what}.
+        The action commitment $\ahash$ closes this for the reference
+        flow (the signature now covers tool and arguments; the client
+        refuses to run a different call), but it is exercised by unit
+        tests, not by an end-to-end experiment, and it is only as strong as
+        the party that executes the call.
+  \item[M5. Malicious or poisoned tool server, prompt injection.]
+        A server that returns crafted results, or an injection that
+        causes or hides drift, acts on the agent's side of the proxy.
+        The proxy sees tool calls and a drift estimate; it does not
+        inspect tool results or prompts.
+  \item[M6. Adaptive evasion of the detector.]
+        An adversary who keeps $\Dhat$ below the threshold $\theta$ (and
+        exploits the burn-in, Limitation~3) is never halted. No
+        adaptive attacker was evaluated.
+  \item[M7. Denial of service.]
+        Flooding the principal with halts, and (in the reference
+        interceptor) submitting a bad APB for a pending evidence\_id,
+        which \emph{deletes} that pending halt: the call is not executed
+        but cannot be approved either.
 \end{description}
 
 \subsection{A2A Specification Maturity}
@@ -1272,7 +1414,7 @@ modifying the proxy architecture.
 
 \begin{enumerate}[leftmargin=2em, topsep=2pt, itemsep=2pt]
   \item \textbf{Dynamic tool discovery.}
-        The Sprint~1 proxy hardcodes the five P7 tools. A production
+        The proxy entry point hard-codes the five P7 tools. A production
         deployment requires dynamic tool discovery and mirror
         registration, which we treat as an engineering extension.
   \item \textbf{Single governance layer.}
@@ -1284,78 +1426,120 @@ modifying the proxy architecture.
         $\Azero$. For newly launched agents, the initial $\Dhat$
         is conservative (low drift), meaning the first few calls
         of a genuinely malicious sequence may not trigger a halt.
-  \item \textbf{APBRequired prioritises safety over liveness.}
-        The current protocol deliberately blocks the tool call until
-        the client provides a signed APB: \emph{no authority, no
-        action}. This conservative posture is intentional and
-        appropriate for compliance-critical, financial, and
-        infrastructure deployments where silent execution is
-        unacceptable. The operational cost is that a non-responsive
-        client suspends session progress until explicit authority
-        resolution. Paper~10 will introduce timeout semantics,
-        escrow-state serialisation, and asynchronous approval queues
-        as a controlled relaxation of this safety bound while
-        preserving the core accountability guarantee.
+  \item \textbf{A halt is not forwarded and is not awaited.}
+        The design principle is \emph{no authority, no action}: a
+        halted call is not forwarded to the server. In the reference
+        implementation the halt is returned as a text result
+        (Remark~\ref{rem:backward}), so the call completes and nothing
+        waits for the principal; the intended blocking wire protocol is
+        not implemented. Paper~10 \citep{fernandez2026nbg} treats the
+        asynchronous side (timeout semantics, escrow, deferred
+        approval); it was itself corrected after an audit found that
+        its first release let an APB for one entry resolve another.
+  \item \textbf{V4 window versus human latency.}
+        V4 rejects an APB whose $t_e$ is older than the replay window
+        (default $300\,\si{s}$, configurable per interceptor). A human
+        who answers a halt after more time than that is refused as a
+        replay; the window must be set to the expected approval time.
+  \item \textbf{No real MCP client, server, transport or LLM.}
+        Every experiment calls the interceptor in-process with a
+        \texttt{MockLLM} and an auto-approving simulated human. There
+        is no HTTP+SSE implementation, and no run against a third-party
+        MCP client or public MCP server.
   \item \textbf{Benchmark hardware and network conditions.}
         Latency measurements were collected on a single hardware
         configuration (i9-13900HX, 32\,GB RAM) under local,
         in-process conditions ($\Dnet = 0$). Absolute latency values
         will differ under cloud deployments, containerised proxies,
-        or cross-network configurations; the relative ordering of
-        ADMIT and HALT paths and the O(1) windowed-IML property are
-        hardware-independent.
+        or cross-network configurations. The windowed monitor is $O(1)$
+        per call by construction; the relative ordering of ADMIT and HALT
+        was not tested on other hardware.
+\end{enumerate}
+
+\subsection{Threats to Validity}
+
+\emph{Internal.} The agent is a deterministic \texttt{MockLLM}; the
+$31\%$ halt rate is imposed by its drift schedule. The human is
+simulated and always approves, so APB validity measures that local
+signatures verify, not approval behaviour. \emph{External.} One
+machine (Windows), five toy tools, no third-party client or server, no
+live LLM, no user study, and single-run measurements without confidence
+intervals. \emph{Construct.} The latency in E1 is an in-process
+function call and stands in for, but is not, the overhead of a real MCP
+transport. \emph{Statistical.} The adversarial suite is authored by the
+same person who wrote the defences. \emph{Comparison.} There is no
+baseline: no other guardrail, gateway or policy engine (for example a
+rules-based guard or an OPA/Cedar gateway) was evaluated, and the
+related work does not survey MCP-specific security work (tool
+poisoning, prompt-injection defences), access-control and delegation
+systems (capability and credential chaining, macaroons, authenticated
+delegation) or enforcement-monitor theory.
+
+\subsection{Revision Note: What the First Release Got Wrong}
+
+An independent audit of the first release found the following; each is
+either corrected in this version or stated as a limitation above.
+\begin{enumerate}[leftmargin=2em, topsep=2pt, itemsep=2pt]
+  \item \textbf{Claims the code did not meet.} The paper said the proxy
+        supports HTTP+SSE (no implementation exists) and that
+        $p9/\mathrm{apbRequired}$ is sent as a blocking notification that
+        a legacy client would ignore and time out on (the halt is
+        returned as a text result). Both are withdrawn.
+  \item \textbf{V5 was not applied.} The verifier was called without a
+        seen-event set. Fixed, with a test.
+  \item \textbf{Signature did not cover the call.} $\Es$ carried no tool
+        or arguments (TOCTOU). Fixed with the optional $\ahash$.
+  \item \textbf{Experiment labels.} E2 is not a ``real agent'' (it uses
+        \texttt{MockLLM} and an auto-approving human; the live variant
+        was never run), and a latency threshold was named ``the T9.1
+        gate''. Both renamed.
+  \item \textbf{Theorems.} T9.1 and T9.2 are now stated as what they are
+        (by construction; a decomposition); T9.3 is stated under an
+        explicit attribution axiom, and its former justification through
+        DC.1 is dropped.
+  \item \textbf{Scaffolding.} References to ``Sprint~N'' and to sections
+        that do not exist in this paper were removed.
 \end{enumerate}
 
 % =============================================================================
 \section{Conclusion}
 \label{sec:conclusion}
 
-We introduced the MCP Governance Proxy ($\Proxy$), a
-\emph{protocol-layer governance control plane} that deploys
-identity-bound governance (P8 APB protocol) on any MCP-compatible
-LLM agent without modifying the agent's code---the first governance
-infrastructure of this kind, occupying the same architectural role
-that service meshes occupy for microservice traffic.
-We proved three theorems: Transparency Invariance (T9.1), establishing
-that the proxy is observationally equivalent to a direct server
-connection on the non-halt path; Halt Latency Bound (T9.2), establishing
-that governance events propagate to the agent within a latency bounded
-by $\Dnet + \Dverify + \Dpolicy$; and Multi-Hop Authority Propagation
-(T9.3), establishing that in A2A delegation chains, the accountability
-of a governance event is well-defined and attaches to the originating
-agent's principal.
+We described the MCP Governance Proxy ($\Proxy$), a design that places
+the P8 identity-bound governance protocol at the MCP layer so that it
+can be applied to an MCP agent without changing the agent's code, and a
+Python reference implementation of its decision logic. We added one
+element to P8's evidence block, an optional action commitment $\ahash$,
+so that the principal's signature covers which call is approved.
 
-Five experiments validate the construction:
+The three results are modest: T9.1 holds by construction, T9.2 is a
+decomposition of the halt latency, and T9.3 holds under an explicit
+attribution axiom and an unauthenticated delegation chain.
+
+The evaluation is in-process and simulated:
 \begin{itemize}[leftmargin=2em, topsep=2pt, itemsep=1pt]
-  \item \textbf{E1} (latency overhead): O(1) windowed IML achieves
-        P95\,=\,$51.8\,\si{\micro\second}$, $193\times$ below the
-        $10\,\si{\milli\second}$ T9.1 gate; HALT pipeline adds only
-        $\approx 10\,\si{\micro\second}$ over the ADMIT baseline (T9.2).
-  \item \textbf{E2} (real-agent APB, $5$ seeds $\times$ $200$ steps):
-        $310$ HALT events, $100\%$ APB validity, $21$ DENY events
-        correctly distinguished; T9.1 holds.
-  \item \textbf{E3} (A2A authority propagation, depths $1$--$5$):
-        $334$ HALT events, $100\%$ originator binding at every chain
-        depth; T9.3 holds.
-  \item \textbf{E4} (concurrency stress, $N \in \{1,4,16,64\}$ threads;
-        $N \in \{1,4,8,16\}$ processes): $0$ exceptions, $100\%$
-        APB validity; GIL-limited thread saturation is expected and
-        not a practical bottleneck for LLM-paced agents.
-  \item \textbf{E5} (security adversarial suite): five attack vectors
-        (wrong-key, evidence tamper, replay, revoked principal,
-        authority substitution); adversary success rate\,$= 0\%$.
+  \item \textbf{E1}: the windowed monitor has a P95 decision overhead of
+        $51.8\,\si{\micro\second}$ (an in-memory call, not a real
+        transport); the HALT path adds $\approx 10\,\si{\micro\second}$.
+  \item \textbf{E2} (\texttt{MockLLM}, simulated human, $5$ seeds
+        $\times$ $200$ steps): $310$ HALT events, every APB verifies;
+        the live-LLM variant was not run.
+  \item \textbf{E3}: the configured delegation chain is copied into the
+        evidence block at depths $1$--$5$; the chain is not authenticated.
+  \item \textbf{E4}: $0$ exceptions for independent concurrent sessions.
+  \item \textbf{E5}: six author-written attacks are rejected; a
+        regression suite, not a security measurement.
 \end{itemize}
 
 The implementation, available at
-\url{https://github.com/chelof100/mcp-governed-agents}, passes $92$
-tests ($61$ inherited from P7+P8, $31$ new proxy tests).
+\url{https://github.com/chelof100/mcp-governed-agents}, passes $97$
+tests ($61$ inherited from P7+P8, $36$ new proxy tests).
 
 \paragraph{Future work.}
-The most pressing extension is \emph{non-blocking governance}: the
-current proxy suspends execution until a human signs the APB.
-Paper~10 will formalise timeout semantics, escrow-state serialisation,
-and deferred-approval queues so that governance events can be resolved
-asynchronously without halting the agent pipeline.
+Paper~10 \citep{fernandez2026nbg} addresses the asynchronous side:
+timeout semantics, escrow-state serialisation and deferred-approval
+queues, so that governance events can be resolved without halting the
+agent pipeline. It has not been integrated into this proxy.
 A second direction is distributed, multi-organisation governance
 via a Merkle-chained APB log providing tamper-evident accountability
 across organisational boundaries.
@@ -1363,10 +1547,14 @@ A third direction is dynamic tool discovery: the current proxy
 hardcodes the tool risk map; a conformant implementation should mirror
 the server's tool list dynamically and apply risk scores via a
 configurable policy file.
-Finally, T9.3 (Multi-Hop Authority Propagation, depth~1--5) warrants
-a dedicated formalisation: an inductive proof for arbitrary chain
-depth, a full adversarial model for authority-substitution attacks,
-and cross-organisation delegation under federated PKI.
+Finally, the pieces needed to turn this design into a demonstrated
+system are, in order of importance: an end-to-end evaluation against a
+third-party MCP client and real MCP servers over a real transport;
+evaluation with real LLMs and tasks, with false positives and a real
+or at least latency-modelled approver; authenticated delegation (each
+delegator signs the next hop), with branching chains and scope
+attenuation; and a comparison against existing guardrail and
+policy-engine baselines.
 
 \paragraph{Code and data.}
 All code and experimental data are available at
